@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1100" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">A quiet afternoon at Koa's</title>
+  <desc id="desc">An original cozy Japanese cafe and home studio, with golden afternoon light, garden windows, a record player, books, and leafy plants.</desc>
+  <defs>
+    <linearGradient id="wall" x1="700" y1="0" x2="700" y2="850" gradientUnits="userSpaceOnUse"><stop stop-color="#F4E9D5"/><stop offset="1" stop-color="#E3CEAC"/></linearGradient>
+    <linearGradient id="sky" x1="500" y1="130" x2="500" y2="710" gradientUnits="userSpaceOnUse"><stop stop-color="#CAD9CE"/><stop offset=".53" stop-color="#E8D9B9"/><stop offset="1" stop-color="#DBBF8A"/></linearGradient>
+    <linearGradient id="floor" x1="700" y1="794" x2="700" y2="1100" gradientUnits="userSpaceOnUse"><stop stop-color="#B79470"/><stop offset="1" stop-color="#D9B68B"/></linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="200"><stop stop-color="#AD7952"/><stop offset="1" stop-color="#8E6245"/></linearGradient>
+    <linearGradient id="window-light" x1="392" y1="191" x2="854" y2="826" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF9DD" stop-opacity=".21"/><stop offset="1" stop-color="#FFF9DD" stop-opacity="0"/></linearGradient>
+    <linearGradient id="curtain" x1="160" y1="0" x2="324" y2="0"><stop stop-color="#FCF1D9"/><stop offset=".5" stop-color="#E8D8B9"/><stop offset="1" stop-color="#FFF4DB"/></linearGradient>
+    <pattern id="grain" width="105" height="220" patternUnits="userSpaceOnUse"><path d="M15 0L11 220M38 0L42 220M74 0L67 220M100 0L96 220" stroke="#795638" stroke-opacity=".055" stroke-width="2"/></pattern>
+    <filter id="blur"><feGaussianBlur stdDeviation="13"/></filter>
+    <filter id="small-blur"><feGaussianBlur stdDeviation="4"/></filter>
+  </defs>
+  <path fill="url(#wall)" d="M0 0H1400V1100H0Z"/>
+  <!-- Timber ceiling and plaster give the room a quiet handmade character. -->
+  <path d="M0 0H1400V61H0Z" fill="#8D6B4E"/>
+  <path d="M0 54H1400V69H0Z" fill="#72533B" opacity=".45"/>
+  <path d="M74 0H113V817H74ZM1288 0H1329V817H1288Z" fill="#A68360"/>
+  <path d="M84 71H100V797H84ZM1300 71H1313V797H1300Z" fill="#BD9C76"/>
+  <path d="M0 790H1400V1100H0Z" fill="url(#floor)"/>
+  <path d="M0 790H1400V1100H0Z" fill="url(#grain)"/>
+  <path d="M0 798H1400M0 862H1400M0 949H1400M0 1054H1400" stroke="#956C49" stroke-opacity=".3" stroke-width="2"/>
+  <path d="M259 798L172 1100M526 798L501 1100M876 798L924 1100M1150 798L1276 1100" stroke="#956C49" stroke-opacity=".28" stroke-width="2"/>
+  <path d="M0 777H1400V801H0Z" fill="#A4815F"/>
+  <path d="M0 777H1400V783H0Z" fill="#D1B38C"/>
+  <!-- A broad garden window remains an airy, uncluttered backdrop for the companion. -->
+  <path d="M211 141H931V737H211Z" fill="#A2805C"/>
+  <path d="M225 151H918V722H225Z" fill="#7E735A"/>
+  <path d="M238 165H905V709H238Z" fill="url(#sky)"/>
+  <circle cx="789" cy="303" r="73" fill="#FFF1C6" opacity=".48" filter="url(#blur)"/>
+  <circle cx="789" cy="303" r="49" fill="#FFF2CD" opacity=".72"/>
+  <path d="M238 498C333 457 352 411 420 425C502 442 546 385 617 417C685 448 712 403 766 425C822 448 852 467 905 451V709H238Z" fill="#A5B5A0" opacity=".75"/>
+  <path d="M238 557C302 523 349 549 412 516C475 483 545 532 607 516C693 494 717 551 796 528C837 517 875 517 905 531V709H238Z" fill="#869F87"/>
+  <path d="M238 623C325 589 403 617 462 586C521 555 596 595 676 584C762 572 837 592 905 572V709H238Z" fill="#6F8D76"/>
+  <path d="M247 704C366 665 438 683 509 657C588 626 691 668 776 639C832 620 865 628 905 633V709H238Z" fill="#5F7D66" opacity=".65"/>
+  <path d="M318 612C335 547 334 443 323 380M328 465L296 426M331 504L366 467M327 426L344 398" stroke="#6B7F66" stroke-width="7" stroke-linecap="round"/>
+  <path d="M284 409C267 387 279 361 297 370C284 341 306 330 318 345C318 319 341 322 344 346C364 331 383 352 365 370C393 371 385 399 364 399C373 419 349 431 334 415C319 434 295 428 297 413Z" fill="#7A9477"/>
+  <path d="M830 649C822 574 828 500 844 458M831 549L802 515M834 530L862 502" stroke="#7C8165" stroke-width="5" stroke-linecap="round"/>
+  <path d="M796 504C780 487 793 463 810 472C809 450 830 442 842 461C858 440 883 457 873 477C894 484 889 507 871 508C869 531 848 533 835 517C818 531 798 521 796 504Z" fill="#9CA580"/>
+  <path d="M238 165H905V709H238Z" fill="url(#window-light)"/>
+  <path d="M457 159H472V717H457ZM683 159H698V717H683Z" fill="#B19470"/>
+  <path d="M466 166H470V710H466ZM692 166H696V710H692Z" fill="#E6D0A6"/>
+  <path d="M231 465H911V479H231Z" fill="#B19470"/>
+  <path d="M232 467H909V471H232Z" fill="#D9BE94"/>
+  <path d="M202 727H941V748H202Z" fill="#BE9C70"/>
+  <path d="M209 748H936V757H209Z" fill="#8D704E" opacity=".23"/>
+  <!-- Linen, hung loosely at the far left. -->
+  <path d="M180 131H322C310 236 286 357 271 450C262 508 253 639 268 739H179C189 558 176 333 180 131Z" fill="url(#curtain)"/>
+  <path d="M201 147C192 326 213 520 198 726M235 148C235 316 215 557 228 731M270 149C262 301 239 410 245 541" stroke="#BEAB8A" stroke-opacity=".32" stroke-width="3"/>
+  <path d="M175 128H939" stroke="#7E694F" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="169" cy="128" r="8" fill="#94785A"/>
+  <circle cx="945" cy="128" r="8" fill="#94785A"/>
+  <path d="M186 132V149M210 132V149M234 132V149M258 132V149M282 132V149M307 132V149" stroke="#8B7355" stroke-width="3"/>
+  <!-- Pale bars of afternoon light on the floor. -->
+  <path d="M264 802H452L811 1100H496ZM485 802H675L1113 1100H849ZM713 802H895L1400 1065V1100H1150Z" fill="#FFE5AD" opacity=".22"/>
+  <ellipse cx="653" cy="958" rx="370" ry="74" fill="#8D7251" opacity=".07" filter="url(#blur)"/>
+  <!-- A small shelf of things collected slowly. -->
+  <path d="M1010 203H1238V219H1010Z" fill="#9B744F"/>
+  <path d="M1026 219V246M1219 219V246" stroke="#8B6849" stroke-width="9"/>
+  <path d="M1030 135H1046V203H1030Z" fill="#B87757"/>
+  <path d="M1049 126H1067V203H1049Z" fill="#97A38C"/>
+  <path d="M1070 141H1084V203H1070Z" fill="#E2CEA7"/>
+  <path d="M1088 132L1103 129L1118 201L1102 204Z" fill="#857B69"/>
+  <path d="M1034 146H1042M1053 140H1063M1073 152H1081" stroke="#ECDAB7" stroke-width="2"/>
+  <path d="M1156 170C1137 160 1141 139 1154 135C1158 122 1174 124 1176 136C1193 138 1193 158 1178 166L1178 186H1158Z" fill="#C99D7A"/>
+  <path d="M1147 181H1186L1181 203H1153Z" fill="#C39E7B"/>
+  <path d="M1211 165C1193 154 1200 138 1210 142C1207 123 1225 120 1228 137C1243 130 1255 145 1242 156C1256 166 1243 179 1229 171L1228 191H1213Z" fill="#6D8967"/>
+  <path d="M1200 184H1241L1235 203H1207Z" fill="#E1CFAC"/>
+  <path d="M1034 294H1210V432H1034Z" fill="#A88864"/>
+  <path d="M1043 303H1201V423H1043Z" fill="#F2E7CF"/>
+  <path d="M1060 400C1094 386 1107 350 1129 370C1155 343 1176 382 1185 400Z" fill="#A7B49A"/>
+  <circle cx="1167" cy="336" r="15" fill="#D6AF74"/>
+  <path d="M1060 400H1185" stroke="#C3B59B" stroke-width="2"/>
+  <!-- A record player sits on a low walnut cabinet, off to one side. -->
+  <ellipse cx="1113" cy="960" rx="230" ry="30" fill="#756044" opacity=".12" filter="url(#small-blur)"/>
+  <path d="M950 715H1281V930H950Z" fill="#9A704E"/>
+  <path d="M960 728H1271V914H960Z" fill="#B88C63"/>
+  <path d="M1109 728H1116V914H1109Z" fill="#866144"/>
+  <path d="M973 739H1097V902H973ZM1129 739H1259V902H1129Z" fill="#AD8058"/>
+  <path d="M1082 799V826M1143 799V826" stroke="#D9B57C" stroke-width="5" stroke-linecap="round"/>
+  <path d="M964 928H984L979 963H968ZM1248 928H1267L1263 963H1253Z" fill="#795C43"/>
+  <path d="M940 703H1288V722H940Z" fill="#D0AB7B"/>
+  <path d="M941 722H1288V729H941Z" fill="#7E5F43" opacity=".3"/>
+  <path d="M976 640H1161V701H976Z" fill="#775C47"/>
+  <path d="M982 643H1155V691H982Z" fill="#C5AE87"/>
+  <path d="M982 691H1155V699H982Z" fill="#9F7B55"/>
+  <ellipse cx="1061" cy="665" rx="55" ry="19" fill="#383D37"/>
+  <ellipse cx="1061" cy="665" rx="44" ry="14" stroke="#555B4E" stroke-width="2"/>
+  <ellipse cx="1061" cy="665" rx="30" ry="10" stroke="#555B4E" stroke-width="2"/>
+  <ellipse cx="1061" cy="665" rx="12" ry="4" fill="#CBA77B"/>
+  <circle cx="1061" cy="664" r="2" fill="#ECE1C9"/>
+  <path d="M1134 651L1129 669L1101 678" stroke="#D8D0B4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1095 677L1104 674L1108 679L1099 683Z" fill="#625E4C"/>
+  <path d="M980 641L1003 577H1179L1159 641Z" fill="#D6C6A4" fill-opacity=".21" stroke="#9D8968" stroke-width="3"/>
+  <path d="M1189 641H1248V701H1189Z" fill="#686C57"/>
+  <path d="M1195 647H1242V694H1195Z" fill="#535E4D"/>
+  <circle cx="1219" cy="672" r="16" fill="#3F4A3F" stroke="#879078" stroke-width="2"/>
+  <circle cx="1219" cy="672" r="7" fill="#68745C"/>
+  <!-- A single pendant, a ceramic cup, and a leafy floor plant. -->
+  <path d="M1120 60V114" stroke="#7D7057" stroke-width="3"/>
+  <path d="M1071 147C1078 116 1097 105 1120 105C1146 105 1163 119 1171 147Z" fill="#C6A57B"/>
+  <ellipse cx="1121" cy="147" rx="50" ry="8" fill="#E9CD9D"/>
+  <ellipse cx="1121" cy="150" rx="20" ry="5" fill="#FFF2C8"/>
+  <path d="M1119 156L1018 318H1217Z" fill="#FFEAC0" opacity=".08"/>
+  <ellipse cx="176" cy="979" rx="108" ry="22" fill="#705E43" opacity=".15" filter="url(#small-blur)"/>
+  <path d="M154 870C169 795 174 720 161 637M171 777C195 731 213 695 224 657M165 747C140 715 126 681 119 652M172 827C206 790 237 774 255 744M159 810C130 790 104 764 92 734" stroke="#697650" stroke-width="6" stroke-linecap="round"/>
+  <path d="M161 681C133 675 124 636 145 611C172 624 182 658 161 681Z" fill="#7D9166"/>
+  <path d="M164 719C183 692 170 657 146 652C129 678 135 705 164 719Z" fill="#91A079"/>
+  <path d="M185 749C176 716 195 680 224 677C239 704 222 739 185 749Z" fill="#708860"/>
+  <path d="M218 686C207 662 216 631 243 617C262 648 244 677 218 686Z" fill="#8A9B71"/>
+  <path d="M133 712C102 710 85 686 90 660C125 656 148 681 133 712Z" fill="#6C855D"/>
+  <path d="M112 769C79 766 60 744 65 719C97 712 125 738 112 769Z" fill="#8A9E73"/>
+  <path d="M211 790C216 758 248 740 272 751C271 780 242 802 211 790Z" fill="#8FA278"/>
+  <path d="M165 833C142 807 150 777 174 763C199 786 195 817 165 833Z" fill="#70885E"/>
+  <path d="M119 862H216L207 960C183 974 153 974 129 960Z" fill="#BD8864"/>
+  <path d="M119 862H216L213 878H122Z" fill="#CE9F77"/>
+  <path d="M133 887L141 948M148 890L153 955" stroke="#D5AA83" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+  <!-- A small cafe table makes the scene feel like a place to stay awhile. -->
+  <path d="M0 965C57 949 165 960 217 1007L186 1026H0Z" fill="#AA8059"/>
+  <path d="M0 954C64 939 165 946 223 995C222 1010 191 1018 166 1017L0 990Z" fill="#D4B183"/>
+  <path d="M0 990L166 1017C190 1019 214 1011 223 998V1013C207 1027 191 1030 165 1026L0 1000Z" fill="#9F7652"/>
+  <ellipse cx="89" cy="960" rx="42" ry="11" fill="#997B58" opacity=".18"/>
+  <ellipse cx="88" cy="952" rx="37" ry="9" fill="#E9D9B9"/>
+  <path d="M65 921H110L106 949C95 957 79 957 69 949Z" fill="#E4D7BA"/>
+  <path d="M110 925C132 923 130 943 108 942" stroke="#E4D7BA" stroke-width="7"/>
+  <ellipse cx="88" cy="921" rx="23" ry="6" fill="#F1E5CB"/>
+  <ellipse cx="88" cy="922" rx="18" ry="3.5" fill="#856147"/>
+  <path d="M82 902C76 894 87 886 83 879M96 905C90 896 102 888 98 881" stroke="#FFF4DD" stroke-opacity=".6" stroke-width="3" stroke-linecap="round"/>
+  <path d="M0 0H1400V1100H0Z" fill="#EDCF97" opacity=".035"/>
+</svg>

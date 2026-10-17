@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#305348">
+  <meta name="description" content="Your own little place to talk. Everyday Japanese conversations with one personal companion.">
+  <title>Hiroshi sensei · A little conversation, every day</title>
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./assets/icon-180.png" sizes="180x180">
+  <meta name="apple-mobile-web-app-title" content="Hiroshi sensei">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip-link" href="#message-input">Skip to conversation</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="./" aria-label="Hiroshi sensei home"><span class="brand-mark">h<span>•</span></span><span class="brand-name"><b id="brand-name">Hiroshi sensei</b><span>your little place to talk</span></span></a>
+      <div class="sidebar-main">
+        <p class="nav-label">YOUR SPACE</p>
+        <nav>
+          <button class="nav-item active" id="nav-talk" type="button"><span data-icon="chat"></span><span>Conversation</span><span class="nav-dot"></span></button>
+          <button class="nav-item" id="nav-scenes" type="button"><span data-icon="compass"></span><span>Everyday scenes</span></button>
+          <button class="nav-item" id="nav-teacher" type="button"><span data-icon="book"></span><span id="learn-label">Learn with Hiroshi sensei</span><span class="nav-count" id="homework-count" hidden>0</span></button>
+          <button class="nav-item" id="nav-phrases" type="button"><span data-icon="bookmark"></span><span>My phrasebook</span><span class="nav-count" id="phrase-count">0</span></button>
+          <button class="nav-item" id="nav-memories" type="button"><span data-icon="sparkles"></span><span>Our notebook</span></button>
+        </nav>
+        <div class="daily-card">
+          <div class="daily-top"><span class="sun-symbol">☀</span><span>A little, every day</span></div>
+          <p>Small conversations.<br>Growing confidence.</p>
+          <div class="progress-track"><div id="daily-bar"></div></div>
+          <span id="daily-progress">0 of 5 exchanges today</span>
+        </div>
+      </div>
+      <div class="sidebar-bottom">
+        <button class="nav-item" id="install-button" type="button" aria-label="Install app"><span data-icon="download"></span><span id="install-label">Install app</span></button>
+        <button class="profile-button" id="settings-button" type="button"><span class="profile-initial" id="profile-initial">E</span><span><strong id="profile-name">Your personal space</strong><small>Preferences & connection</small></span><span data-icon="settings"></span></button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="page-header">
+        <div><p class="eyebrow" id="greeting-date">A LITTLE CONVERSATION, EVERY DAY</p><h1>Make yourself at home<span>.</span></h1></div>
+        <div class="header-actions"><button class="install-app-button" id="install-app-button" type="button"><span data-icon="download"></span><span id="install-app-label">Install app</span></button><button class="language-pill" id="language-button" type="button"><span class="language-emblem">あ</span><span id="language-label">Japanese</span><span data-icon="chevron"></span></button></div>
+      </header>
+
+      <div class="game-layout">
+        <section class="companion-panel" aria-label="Your companion and current scene">
+          <div class="scene-illustration" id="scene-illustration">
+            <img class="room-art" src="./assets/room.svg" alt="A cozy sunlit room with plants and a view of green hills">
+            <div class="scene-warmth"></div>
+            <div class="scene-label"><span class="status-dot"></span><span id="scene-location">THE LITTLE CAFÉ</span></div>
+            <button class="icon-button scene-change" id="change-scene" title="Change scene" aria-label="Change scene" type="button"><span data-icon="compass"></span></button>
+            <div class="floating-note" id="floating-note"><span>こんにちは</span><small>It starts with a hello.</small></div>
+            <img class="companion-art" id="companion-art" src="./assets/hiroshi-sensei.png" alt="Hiroshi sensei, your red-haired anime teacher">
+            <div class="companion-nameplate"><span class="nameplate-orbit">✦</span><div><h2 id="companion-name">Hiroshi sensei</h2><p>One companion. Your pace.</p></div><span class="online-indicator" aria-hidden="true"></span></div>
+          </div>
+          <div class="scene-info">
+            <div class="scene-info-top"><span class="scene-tag" id="scene-tag">THE LITTLE CAFÉ</span><span class="tiny-label" id="scene-difficulty">EVERYDAY JAPANESE</span></div>
+            <h2 id="scene-title">A coffee, and a little catch-up.</h2>
+            <p id="scene-description">Pull up a chair. Order something you like, and let the conversation find its way.</p>
+            <div class="scene-goal"><span data-icon="leaf"></span><span id="scene-goal">A small adventure: order your favorite drink.</span></div>
+            <button class="text-button" id="explore-scenes" type="button">Find another little adventure <span aria-hidden="true">↗</span></button>
+          </div>
+        </section>
+
+        <section class="conversation-panel" aria-labelledby="conversation-title">
+          <header class="conversation-header">
+            <div class="mini-avatar"><img src="./assets/hiroshi-sensei.png" alt=""></div>
+            <div class="conversation-heading"><h2 id="conversation-title">A moment with Hiroshi sensei</h2><p id="connection-label"><span class="status-dot"></span>Guided practice · checking connection</p></div>
+            <button class="icon-button" id="restart-button" type="button" title="Start a fresh conversation" aria-label="Start a fresh conversation"><span data-icon="refresh"></span></button>
+          </header>
+          <div class="conversation-tools"><span class="practice-label" id="mode-label">GUIDED PRACTICE</span><button class="teacher-return" id="teacher-back" type="button" hidden>Back to conversation</button><button class="tool-toggle" id="translation-toggle" type="button" aria-pressed="true"><span data-icon="translate"></span> Translation <span class="toggle-track"></span></button></div>
+          <div class="messages" id="messages" role="log" aria-label="Conversation messages" aria-live="polite" aria-relevant="additions"></div>
+          <div class="suggestions-area"><button id="help-button" class="help-button" type="button" aria-expanded="true" aria-controls="suggestions"><span data-icon="sparkles"></span>A little help replying<span data-icon="chevron"></span></button><div class="suggestions" id="suggestions"></div></div>
+          <form class="composer" id="chat-form">
+            <label class="sr-only" id="composer-label" for="message-input">Your message to Hiroshi sensei</label>
+            <textarea id="message-input" maxlength="2500" rows="1" placeholder="Say something, in Japanese or English…" aria-describedby="composer-note"></textarea>
+            <button class="icon-button mic-button" id="mic-button" type="button" aria-label="Dictate a message" title="Dictate a message"><span data-icon="mic"></span></button>
+            <button class="send-button" id="send-button" type="submit" aria-label="Send message"><span data-icon="arrow"></span></button>
+          </form>
+          <p class="composer-note" id="composer-note"><span data-icon="leaf"></span>No scores. No pressure. Just a little practice.</p>
+        </section>
+      </div>
+      <footer class="page-footer"><span>Made for your own kind of progress.</span><button id="about-button" type="button">About your companion <span>↗</span></button></footer>
+    </main>
+  </div>
+  <nav class="mobile-nav" aria-label="Mobile navigation"><button type="button" id="mobile-talk" aria-label="Conversation"><span data-icon="chat"></span><span>Talk</span></button><button type="button" id="mobile-scenes"><span data-icon="compass"></span><span>Scenes</span></button><button type="button" id="mobile-teacher"><span data-icon="book"></span><span>Learn</span></button><button type="button" id="mobile-phrases"><span data-icon="bookmark"></span><span>Phrases</span></button><button type="button" id="mobile-settings"><span data-icon="settings"></span><span>Settings</span></button></nav>
+  <dialog id="modal" aria-labelledby="modal-title"><div class="modal-header"><div><p class="eyebrow" id="modal-eyebrow">YOUR SPACE</p><h2 id="modal-title">Preferences</h2></div><button class="icon-button" id="close-modal" aria-label="Close dialog" type="button"><span data-icon="close"></span></button></div><div class="modal-content" id="modal-content"></div></dialog>
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>

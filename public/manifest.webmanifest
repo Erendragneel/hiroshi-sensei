@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Hiroshi sensei — Your Personal Companion",
+  "short_name": "Hiroshi sensei",
+  "description": "Japanese lessons, homework, and everyday conversation with Hiroshi sensei.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f5f0",
+  "theme_color": "#345849",
+  "lang": "en",
+  "categories": ["education", "games"],
+  "icons": [
+    {"src":"./assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"./assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
+    {"src":"./assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+  ]
+}

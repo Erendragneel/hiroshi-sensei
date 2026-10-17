@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+.next/
+dist/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+test-results/
+playwright-report/
+/outputs/
+/hosted/

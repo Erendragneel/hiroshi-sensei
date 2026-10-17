@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 1000" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Koa, your companion</title>
+  <desc id="desc">An original illustration of a calm adult friend with softly waved dark hair, warm brown skin, and a sage green overshirt.</desc>
+  <defs>
+    <linearGradient id="skin" x1="299" y1="278" x2="444" y2="624" gradientUnits="userSpaceOnUse"><stop stop-color="#DDAE8C"/><stop offset=".57" stop-color="#D4A17D"/><stop offset="1" stop-color="#C28B6A"/></linearGradient>
+    <linearGradient id="face" x1="274" y1="252" x2="424" y2="503" gradientUnits="userSpaceOnUse"><stop stop-color="#E7BA96"/><stop offset=".6" stop-color="#DFAE88"/><stop offset="1" stop-color="#D39B77"/></linearGradient>
+    <linearGradient id="hair" x1="253" y1="150" x2="449" y2="349" gradientUnits="userSpaceOnUse"><stop stop-color="#4B3934"/><stop offset=".45" stop-color="#352C2B"/><stop offset="1" stop-color="#292728"/></linearGradient>
+    <linearGradient id="shirt" x1="306" y1="565" x2="389" y2="997" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF1DC"/><stop offset="1" stop-color="#EAD7BA"/></linearGradient>
+    <linearGradient id="sage" x1="189" y1="550" x2="542" y2="945" gradientUnits="userSpaceOnUse"><stop stop-color="#A8B99D"/><stop offset=".5" stop-color="#8FA488"/><stop offset="1" stop-color="#768E75"/></linearGradient>
+    <linearGradient id="sleeve" x1="111" y1="638" x2="236" y2="927" gradientUnits="userSpaceOnUse"><stop stop-color="#96AC8E"/><stop offset="1" stop-color="#7B9276"/></linearGradient>
+    <radialGradient id="blush"><stop stop-color="#C87962" stop-opacity=".25"/><stop offset="1" stop-color="#C87962" stop-opacity="0"/></radialGradient>
+    <filter id="soft-shadow" x="-.3" y="-.3" width="1.6" height="1.6"><feGaussianBlur stdDeviation="10"/></filter>
+  </defs>
+  <ellipse cx="351" cy="971" rx="242" ry="17" fill="#443E31" opacity=".09" filter="url(#soft-shadow)"/>
+  <!-- The gently turned shoulders give the portrait an easy, conversational posture. -->
+  <path d="M258 546C220 559 169 577 139 608C111 637 100 693 91 767L70 985H635L613 770C606 693 587 629 558 606C529 583 479 562 441 546Z" fill="url(#sage)" stroke="#596D59" stroke-width="2.5"/>
+  <path d="M139 608C167 599 203 606 216 642L202 783L184 985H70L91 767C100 693 111 637 139 608Z" fill="url(#sleeve)"/>
+  <path d="M558 606C529 601 502 614 489 645L503 793L524 985H635L613 770C606 693 587 629 558 606Z" fill="#829A7F"/>
+  <path d="M286 536L266 579L250 643L263 985H447L458 645L435 580L418 534Z" fill="url(#shirt)" stroke="#BDA88B" stroke-width="2"/>
+  <path d="M294 477L289 540C291 565 317 590 351 591C385 591 413 566 415 540L409 475Z" fill="url(#skin)" stroke="#B68062" stroke-width="2"/>
+  <path d="M294 487C307 511 332 526 352 528C374 529 395 515 411 494L413 521C394 549 327 559 292 526Z" fill="#A96C53" opacity=".22"/>
+  <path d="M287 548C307 580 334 589 351 589C374 590 400 575 418 548L431 568C415 600 384 622 352 623C319 621 286 602 273 571Z" fill="#F9E8CB"/>
+  <path d="M288 548C304 576 330 593 351 593C376 593 399 578 417 548" stroke="#C7AC88" stroke-width="3" stroke-linecap="round"/>
+  <path d="M260 546L288 538L264 624L284 654L244 699L251 985H204L218 673L224 581Z" fill="#ADC0A3" stroke="#6D8569" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M441 546L415 538L438 624L418 655L459 699L451 985H501L483 672L477 580Z" fill="#9DB395" stroke="#657E63" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M248 702L243 972M458 704L466 972" stroke="#D0DCC5" stroke-width="2" opacity=".6"/>
+  <path d="M131 736C141 723 155 719 167 722M119 863C137 854 153 854 171 861M576 742C561 730 547 727 534 732M587 875C571 866 554 864 541 868" stroke="#607B60" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+  <path d="M300 731C332 742 367 740 400 731M303 889C330 883 369 884 402 893" stroke="#CBB493" stroke-width="2.5" stroke-linecap="round" opacity=".5"/>
+  <path d="M482 729H553L549 821C534 830 515 829 501 821Z" fill="#91A88B" stroke="#60795E" stroke-width="2"/>
+  <path d="M482 729H553V748H485Z" fill="#AFC1A2" stroke="#6E8668" stroke-width="2"/>
+  <circle cx="518" cy="740" r="3.5" fill="#E6D4AD" stroke="#7C8065"/>
+  <circle cx="463" cy="763" r="4.5" fill="#E3D2AD" stroke="#6D7E61"/>
+  <circle cx="466" cy="857" r="4.5" fill="#E3D2AD" stroke="#6D7E61"/>
+  <circle cx="470" cy="950" r="4.5" fill="#E3D2AD" stroke="#6D7E61"/>
+  <!-- Ears and a softly shaded face. -->
+  <path d="M239 341C221 326 209 337 214 366C217 390 229 410 246 406L253 367Z" fill="url(#skin)" stroke="#B67E60" stroke-width="2.5"/>
+  <path d="M461 340C479 327 490 340 485 367C482 390 469 410 453 404L447 365Z" fill="url(#skin)" stroke="#B67E60" stroke-width="2.5"/>
+  <path d="M225 350C237 351 240 369 236 382M475 351C464 354 462 370 466 382" stroke="#AE735A" stroke-width="3" stroke-linecap="round"/>
+  <path d="M240 288C241 226 283 195 350 196C419 195 462 236 462 299L452 399C448 438 424 478 397 497C383 507 367 515 351 515C334 515 318 508 303 497C272 475 251 441 247 400Z" fill="url(#face)" stroke="#B98163" stroke-width="2.5"/>
+  <path d="M245 314C254 340 251 390 257 418C264 451 283 479 308 498C276 479 252 447 247 402Z" fill="#B87D60" opacity=".16"/>
+  <path d="M449 307C442 348 451 395 437 434C429 455 415 478 396 497C425 480 448 442 452 400L462 299Z" fill="#B87D60" opacity=".13"/>
+  <ellipse cx="286" cy="397" rx="43" ry="28" fill="url(#blush)"/>
+  <ellipse cx="417" cy="397" rx="43" ry="28" fill="url(#blush)"/>
+  <!-- Small, warm eyes with relaxed lids and reflected window light. -->
+  <path d="M268 355C279 343 300 342 314 353C300 365 282 367 268 355Z" fill="#FBEDDC"/>
+  <path d="M386 352C400 342 421 344 433 356C419 366 400 365 386 352Z" fill="#FBEDDC"/>
+  <ellipse cx="294" cy="354" rx="10" ry="12.5" fill="#6A5140"/>
+  <ellipse cx="407" cy="354" rx="10" ry="12.5" fill="#6A5140"/>
+  <ellipse cx="294" cy="354" rx="5.5" ry="9" fill="#342D2B"/>
+  <ellipse cx="407" cy="354" rx="5.5" ry="9" fill="#342D2B"/>
+  <circle cx="291" cy="349" r="3" fill="#FFFAE9"/>
+  <circle cx="404" cy="349" r="3" fill="#FFFAE9"/>
+  <path d="M267 355C279 342 300 341 315 353M386 352C399 342 420 342 434 356" stroke="#49362E" stroke-width="4" stroke-linecap="round"/>
+  <path d="M273 368C284 373 301 371 309 367M392 367C402 372 419 373 428 369" stroke="#B77B61" stroke-width="1.8" stroke-linecap="round" opacity=".65"/>
+  <path d="M267 329C282 321 301 321 314 326M387 326C402 320 422 323 433 331" stroke="#624438" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M349 357C347 377 341 394 344 399C347 403 354 403 359 400" stroke="#B87C5E" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M340 405C345 408 355 409 362 405" stroke="#F2C7A0" stroke-width="3" stroke-linecap="round"/>
+  <path d="M323 438C338 446 361 448 381 435" stroke="#9D604E" stroke-width="3.3" stroke-linecap="round"/>
+  <path d="M335 453C345 457 358 457 367 452" stroke="#F1BD97" stroke-width="3" stroke-linecap="round"/>
+  <path d="M318 435L323 438M381 435L384 432" stroke="#AD7259" stroke-width="2" stroke-linecap="round"/>
+  <!-- A loose, wavy cut, drawn in individual overlapping masses. -->
+  <path d="M229 356C214 332 205 303 211 281C198 258 212 235 221 224C215 197 243 181 263 177C273 151 308 143 332 153C360 133 390 143 407 154C434 148 459 170 461 188C491 197 499 222 491 246C510 273 493 298 480 311L464 359L451 334L448 284C414 284 391 264 380 247C360 279 321 289 287 281C284 304 263 322 249 327L244 364Z" fill="url(#hair)" stroke="#3A2D2A" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M225 266C236 240 268 232 287 238C286 211 320 185 351 191C374 169 414 173 436 196" stroke="#5B443B" stroke-width="7" stroke-linecap="round" opacity=".65"/>
+  <path d="M229 241C254 213 274 224 291 211C310 194 316 168 343 164M305 255C335 264 371 246 380 218C396 250 427 270 457 264M441 210C470 224 478 247 470 272" stroke="#725044" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+  <path d="M248 210C261 196 275 195 286 195M368 163C385 157 399 162 409 172M221 292C224 279 230 270 239 265M480 289L469 310" stroke="#A17658" stroke-width="2.5" stroke-linecap="round" opacity=".38"/>
+  <path d="M287 269C274 290 266 308 247 315M378 239C369 269 331 285 305 279M445 275C451 288 453 309 451 326" stroke="#242324" stroke-width="4" stroke-linecap="round" opacity=".55"/>
+  <path d="M231 368L235 382" stroke="#7D5946" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="233" cy="392" r="3.5" fill="#EBD3A5"/>
+</svg>

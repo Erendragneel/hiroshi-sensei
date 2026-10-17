@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1100" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">The little hillside station</title>
+  <desc id="desc">An original quiet Japanese railway platform beneath a wooden canopy, with a small green train, warm afternoon sky, a bench, and rolling green hills.</desc>
+  <defs>
+    <linearGradient id="sky" x1="700" y1="0" x2="700" y2="800" gradientUnits="userSpaceOnUse"><stop stop-color="#CDDCD0"/><stop offset=".65" stop-color="#EAE1C5"/><stop offset="1" stop-color="#F0D1A1"/></linearGradient>
+    <linearGradient id="platform" x1="700" y1="815" x2="700" y2="1100" gradientUnits="userSpaceOnUse"><stop stop-color="#C3B89B"/><stop offset="1" stop-color="#E2D1AD"/></linearGradient>
+    <linearGradient id="train" x1="240" y1="550" x2="240" y2="714" gradientUnits="userSpaceOnUse"><stop stop-color="#E9E7D1"/><stop offset="1" stop-color="#C8D0B6"/></linearGradient>
+    <linearGradient id="glass" x1="240" y1="566" x2="240" y2="648" gradientUnits="userSpaceOnUse"><stop stop-color="#688778"/><stop offset="1" stop-color="#A4B6A0"/></linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="15"/></filter>
+  </defs>
+  <path fill="url(#sky)" d="M0 0H1400V1100H0Z"/>
+  <circle cx="1019" cy="348" r="89" fill="#FFF2D1" opacity=".6" filter="url(#blur)"/>
+  <circle cx="1019" cy="348" r="54" fill="#FFF0CA" opacity=".8"/>
+  <path d="M0 490C91 476 153 416 238 445C314 470 338 392 428 414C516 437 546 459 619 429C708 393 758 453 846 430C930 407 999 452 1070 424C1182 380 1243 468 1312 445C1353 431 1380 433 1400 437V768H0Z" fill="#AFBCA1"/>
+  <path d="M0 566C126 507 164 549 276 518C373 492 427 553 525 523C610 497 677 554 786 520C889 489 950 546 1062 514C1186 480 1286 552 1400 510V805H0Z" fill="#8EA489"/>
+  <path d="M0 636C88 593 186 629 294 598C415 564 490 625 584 593C691 557 746 632 864 599C973 569 1084 622 1185 588C1280 555 1359 607 1400 592V840H0Z" fill="#779473"/>
+  <path d="M0 698C144 665 189 699 316 671C461 638 535 691 668 668C795 644 877 702 1003 669C1146 631 1275 683 1400 654V839H0Z" fill="#6A896C"/>
+  <!-- A small station building across the tracks, left of the open central view. -->
+  <path d="M34 479H324V706H34Z" fill="#D4C9A9"/>
+  <path d="M23 474L178 401L338 474V490H23Z" fill="#7E8970"/>
+  <path d="M37 474L179 413L324 474" stroke="#AFB18D" stroke-width="5"/>
+  <path d="M59 510H127V618H59ZM147 510H217V618H147Z" fill="#8C9D89" stroke="#A88F67" stroke-width="7"/>
+  <path d="M93 512V615M181 512V615M60 556H125M150 556H214" stroke="#D6CBB0" stroke-width="4"/>
+  <path d="M246 511H300V702H246Z" fill="#A28F70"/>
+  <path d="M254 520H292V583H254Z" fill="#809683"/>
+  <path d="M285 611V631" stroke="#DBC99E" stroke-width="4" stroke-linecap="round"/>
+  <path d="M30 691H332V708H30Z" fill="#AD9C79"/>
+  <!-- Slender wires and poles cross the distant sky. -->
+  <path d="M451 311V765M1119 319V765" stroke="#8A917C" stroke-width="9"/>
+  <path d="M408 333H491M1075 340H1162" stroke="#7F8976" stroke-width="7" stroke-linecap="round"/>
+  <path d="M0 316C299 349 521 345 760 337C1023 328 1215 360 1400 351M0 356C311 384 530 380 762 373C1035 366 1212 392 1400 387" stroke="#88927B" stroke-width="2.5" opacity=".7"/>
+  <path d="M467 333V371M1134 340V385" stroke="#88927B" stroke-width="4"/>
+  <path d="M440 727H1400V748H440Z" fill="#B4AE8B"/>
+  <path d="M470 694V742M526 694V742M582 694V742M638 694V742M694 694V742M750 694V742M806 694V742M862 694V742M918 694V742M974 694V742M1030 694V742M1086 694V742M1142 694V742M1198 694V742M1254 694V742M1310 694V742M1366 694V742" stroke="#ABB18E" stroke-width="5"/>
+  <path d="M443 693H1400M443 716H1400" stroke="#C8C7A5" stroke-width="5"/>
+  <!-- A friendly local train waiting at the far side of the platform. -->
+  <path d="M18 561C18 549 28 540 40 540H397C426 540 447 560 450 589L462 707H18Z" fill="url(#train)" stroke="#8D9C81" stroke-width="3"/>
+  <path d="M24 536H391C408 536 421 541 431 550H24Z" fill="#B0BAA0"/>
+  <path d="M18 650H456V680H18Z" fill="#7D9979"/>
+  <path d="M19 681H459V703H19Z" fill="#D9DBBF"/>
+  <path d="M32 563H87V628H32ZM105 563H160V628H105ZM178 563H233V628H178ZM251 563H306V628H251Z" fill="url(#glass)" stroke="#A6B198" stroke-width="3"/>
+  <path d="M329 560H389V705H329Z" fill="#D5D9BD" stroke="#A1AD92" stroke-width="3"/>
+  <path d="M336 570H382V629H336Z" fill="url(#glass)"/>
+  <path d="M359 567V699" stroke="#9CA98D" stroke-width="2"/>
+  <path d="M401 568H418C429 568 436 579 438 592L441 629H401Z" fill="url(#glass)"/>
+  <path d="M36 567L57 567L35 608M110 567H132L110 608M183 567H205L183 608M256 567H278L256 608" fill="#DAE5CB" opacity=".2"/>
+  <path d="M30 707H455V720H30Z" fill="#6D7D68"/>
+  <circle cx="98" cy="717" r="17" fill="#515E51"/><circle cx="344" cy="717" r="17" fill="#515E51"/>
+  <circle cx="416" cy="673" r="6" fill="#F4DBA4"/><circle cx="442" cy="673" r="6" fill="#F4DBA4"/>
+  <!-- Rails, gravel, and the broad foreground platform. -->
+  <path d="M0 753H1400V852H0Z" fill="#969A82"/>
+  <path d="M0 767H1400M0 822H1400" stroke="#6B7767" stroke-width="8"/>
+  <path d="M0 764H1400M0 818H1400" stroke="#B6B89D" stroke-width="3"/>
+  <path d="M30 774V814M97 774V814M164 774V814M231 774V814M298 774V814M365 774V814M432 774V814M499 774V814M566 774V814M633 774V814M700 774V814M767 774V814M834 774V814M901 774V814M968 774V814M1035 774V814M1102 774V814M1169 774V814M1236 774V814M1303 774V814M1370 774V814" stroke="#747D6A" stroke-width="14"/>
+  <path d="M0 850H1400V1100H0Z" fill="url(#platform)"/>
+  <path d="M0 850H1400V867H0Z" fill="#D6C99C"/>
+  <path d="M0 879H1400V916H0Z" fill="#DCC893"/>
+  <path d="M0 887H1400M0 899H1400M0 910H1400" stroke="#C5B583" stroke-width="3" stroke-dasharray="2 12" stroke-linecap="round"/>
+  <path d="M0 983H1400M0 1075H1400M241 916L214 1100M562 916L552 1100M878 916L889 1100M1199 916L1230 1100" stroke="#B5AB8D" stroke-width="2" opacity=".55"/>
+  <!-- Warm timber canopy and posts frame the open view. -->
+  <path d="M0 0H1400V142L0 197Z" fill="#7C765B"/>
+  <path d="M0 0H1400V71L0 118Z" fill="#9B9370"/>
+  <path d="M0 164L1400 112V144L0 198Z" fill="#AE9971"/>
+  <path d="M170 112L190 170M484 101L503 159M812 90L831 147M1153 78L1174 135" stroke="#6F6C53" stroke-width="14"/>
+  <path d="M106 192H135V1100H106ZM1283 145H1312V1100H1283Z" fill="#9D9470"/>
+  <path d="M110 192H119V1100H110ZM1287 145H1296V1100H1287Z" fill="#C4B18A"/>
+  <path d="M128 195L221 265M1287 151L1201 228" stroke="#9D9470" stroke-width="18"/>
+  <path d="M102 1062H141V1100H102ZM1278 1062H1317V1100H1278Z" fill="#ADAC8D"/>
+  <path d="M200 185H384V234H200Z" fill="#E6DDC0" stroke="#9B987A" stroke-width="4"/>
+  <path d="M223 210H255M238 198L254 210L238 222" stroke="#799077" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="278" cy="210" r="5" fill="#B49971"/><circle cx="300" cy="210" r="5" fill="#B49971"/><circle cx="322" cy="210" r="5" fill="#B49971"/>
+  <path d="M1137 154V192" stroke="#777C64" stroke-width="5"/>
+  <circle cx="1137" cy="231" r="41" fill="#F0E5C8" stroke="#8D8F72" stroke-width="7"/>
+  <path d="M1137 201V207M1167 231H1161M1137 261V255M1107 231H1113" stroke="#A29E7E" stroke-width="3" stroke-linecap="round"/>
+  <path d="M1137 212V231L1155 239" stroke="#6D7B64" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1137" cy="231" r="4" fill="#6D7B64"/>
+  <!-- A simple wooden bench and a pot of summer flowers. -->
+  <path d="M1043 959H1251V981H1043ZM1050 901H1244V919H1050ZM1050 928H1244V946H1050Z" fill="#A78D64"/>
+  <path d="M1064 919V1034M1231 919V1034" stroke="#6D7A62" stroke-width="9"/>
+  <path d="M1067 980L1053 1046M1229 980L1243 1046" stroke="#6D7A62" stroke-width="10" stroke-linecap="round"/>
+  <path d="M213 942H284L277 1013C260 1023 238 1023 220 1013Z" fill="#BA9270"/>
+  <path d="M211 939H286V952H211Z" fill="#CAA682"/>
+  <path d="M245 939V879M256 938L270 893M236 938L221 900" stroke="#7A916D" stroke-width="4" stroke-linecap="round"/>
+  <path d="M244 911C227 911 218 902 222 892C238 890 248 900 244 911ZM254 920C271 917 276 906 269 897C255 901 249 911 254 920Z" fill="#8FA67B"/>
+  <circle cx="245" cy="876" r="9" fill="#D5AD78"/><circle cx="271" cy="890" r="8" fill="#DFCAA1"/><circle cx="220" cy="896" r="7" fill="#DAAB86"/>
+  <path d="M0 1001L106 992V1100H0ZM1312 984L1400 976V1100H1312Z" fill="#847D5D" opacity=".08"/>
+  <path fill="#EBCB98" opacity=".035" d="M0 0H1400V1100H0Z"/>
+</svg>
