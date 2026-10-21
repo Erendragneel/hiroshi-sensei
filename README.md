@@ -10,6 +10,16 @@ The phone version includes guided conversations, lessons, homework, and saved pr
 
 Source code is backed up in the private [Erendragneel/hiroshi-sensei GitHub repository](https://github.com/Erendragneel/hiroshi-sensei). GitHub holds the code; the private web link above is the phone installation address. Personal saves, exported backups, API secrets, and the downloaded model/runtime are excluded from the repository.
 
+## GitHub Pages deployment
+
+The GitHub Pages deployment is prepared in `.github/workflows/pages.yml`. Run `npm run build:pages` to package only the public game assets into `dist/pages/`. The workflow checks the app, packages that folder, and publishes it to `https://erendragneel.github.io/hiroshi-sensei/` when Pages is enabled. GitHub rejected enabling Pages for the current private repository because the account's plan does not support it. The repository must be made public with the owner's approval, or the account must use a plan that supports private-repository Pages. The address is not live until deployment succeeds.
+
+GitHub Pages serves guided conversations, lessons, homework, and offline practice. It cannot run this app's AI server. The Pages package explicitly disables AI API requests and uses its own installation link. The local and Sites builds retain their existing AI backend configuration.
+
+Hiroshi sensei has a separate manifest identity at `/hiroshi-sensei/`, its own H/star icons, save key, backup identifier, and service-worker cache. Its scope and cache cleanup do not include `/language-miner/`. The installed app name stays Hiroshi sensei when a companion nickname changes. Existing version-1 Hiroshi backups remain compatible. Moving between the private Sites address and GitHub Pages requires exporting and restoring a backup because browser data belongs to each origin.
+
+## Local AI on Windows
+
 On this Windows computer, double-click **Start Koa.cmd**. It starts the local AI and game quietly, then opens the game. **Stop Koa.cmd** closes the background processes started by the launcher. Node.js 22 or newer is needed; the launcher also finds Codex's bundled Node runtime when available.
 
 The local model download is about 2.5 GB. The local AI uses the portable llama.cpp CPU runtime and Qwen3 4B Q4_K_M. They are downloaded from their official publishers and verified with pinned SHA-256 hashes by `Setup-Local-AI.ps1`. Model/runtime files live under `%LOCALAPPDATA%\Koa`, outside this OneDrive project. No administrator installation, API key, or API billing is needed for this route. It is a small local model, with lower capability and reliability than the assistant in this Codex chat.

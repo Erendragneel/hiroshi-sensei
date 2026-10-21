@@ -1,6 +1,7 @@
 // Browsers expose installation in different ways. Keep an accessible route to
 // instructions even when a native install prompt is unavailable or dismissed.
-export const PHONE_APP_URL = 'https://koa-personal-companion.elijio-villa.chatgpt.site/play/';
+import { APP_CONFIG } from './app-config.js';
+export const PHONE_APP_URL = APP_CONFIG.phoneURL;
 
 export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sensei', getConnection = () => ({configured:false, provider:'none'}), phoneURL = PHONE_APP_URL}) {
   let deferredPrompt = null;
@@ -75,7 +76,7 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
 
     if(isLocal) {
       const phone = element('section', 'install-phone-card');
-      phone.append(element('h3', '', 'Start here on your phone'), element('p', '', 'Open this private web link in your phone’s browser. Sign in with your account if asked.'));
+      phone.append(element('h3', '', 'Start here on your phone'), element('p', '', 'Open this game link in your phone’s browser.'));
       const link = element('a', 'install-phone-link', phoneURL);
       link.href = phoneURL; link.target = '_blank'; link.rel = 'noopener';
       phone.append(link);
