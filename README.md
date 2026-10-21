@@ -12,7 +12,7 @@ Source code is backed up in the private [Erendragneel/hiroshi-sensei GitHub repo
 
 ## GitHub Pages deployment
 
-The GitHub Pages deployment is prepared in `.github/workflows/pages.yml`. Run `npm run build:pages` to package only the public game assets into `dist/pages/`. The workflow checks the app, packages that folder, and publishes it to `https://erendragneel.github.io/hiroshi-sensei/` when Pages is enabled. GitHub rejected enabling Pages for the current private repository because the account's plan does not support it. The repository must be made public with the owner's approval, or the account must use a plan that supports private-repository Pages. The address is not live until deployment succeeds.
+GitHub Pages publication remains disabled because the owner chose to keep this repository private and the current account plan does not support Pages for private repositories. The manual-only workflow is prepared in `.github/workflows/pages.yml`; run it only after a supported Pages setup is enabled. It does not run automatically when code is pushed. Run `npm run build:pages` to package only the public game assets into `dist/pages/` locally. Once supported Pages hosting is configured, the manual workflow checks the app, packages that folder, and publishes it to `https://erendragneel.github.io/hiroshi-sensei/`. That address is not live until deployment succeeds.
 
 GitHub Pages serves guided conversations, lessons, homework, and offline practice. It cannot run this app's AI server. The Pages package explicitly disables AI API requests and uses its own installation link. The local and Sites builds retain their existing AI backend configuration.
 
