@@ -4,15 +4,15 @@ An original browser game for relaxed conversation with one companion, inspired b
 
 ## Open the game
 
-On your phone, open [Hiroshi sensei](https://koa-personal-companion.elijio-villa.chatgpt.site/play/) in Safari or Chrome and tap **Install app** at the top of the game. The app shows the browser's install prompt when available, or the steps for adding it to your home screen. Sign in with the owning account if the private site asks. iPhone installation uses Safari → Share → Add to Home Screen.
+On your phone, open [Hiroshi sensei](https://erendragneel.github.io/hiroshi-sensei/) in Safari or Chrome and tap **Install app** at the top of the game. The app shows the browser's install prompt when available, or the steps for adding it to your home screen. The GitHub Pages version opens without a ChatGPT sign-in. iPhone installation uses Safari → Share → Add to Home Screen.
 
 The phone version includes guided conversations, lessons, homework, and saved progress. AI conversations on the phone require a separately configured hosted AI connection; the computer's local model does not move onto the phone. Each device has its own save, with export/restore available in Settings.
 
-Source code is backed up in the private [Erendragneel/hiroshi-sensei GitHub repository](https://github.com/Erendragneel/hiroshi-sensei). GitHub holds the code; the private web link above is the phone installation address. Personal saves, exported backups, API secrets, and the downloaded model/runtime are excluded from the repository.
+Source code is published in the [Erendragneel/hiroshi-sensei GitHub repository](https://github.com/Erendragneel/hiroshi-sensei). Personal saves, exported backups, API secrets, and the downloaded model/runtime are excluded from the repository. If you previously played at the [private Sites address](https://koa-personal-companion.elijio-villa.chatgpt.site/play/), export a backup there and restore it in Settings at the new GitHub address to transfer your progress.
 
 ## GitHub Pages deployment
 
-GitHub Pages publication remains disabled because the owner chose to keep this repository private and the current account plan does not support Pages for private repositories. The manual-only workflow is prepared in `.github/workflows/pages.yml`; run it only after a supported Pages setup is enabled. It does not run automatically when code is pushed. Run `npm run build:pages` to package only the public game assets into `dist/pages/` locally. Once supported Pages hosting is configured, the manual workflow checks the app, packages that folder, and publishes it to `https://erendragneel.github.io/hiroshi-sensei/`. That address is not live until deployment succeeds.
+GitHub Pages uses `.github/workflows/pages.yml` to validate and publish the game on pushes to `main`, with a manual run option in GitHub Actions. Run `npm run build:pages` to package only the public game assets into `dist/pages/` locally. The workflow publishes that folder to `https://erendragneel.github.io/hiroshi-sensei/`. The repository is public with the owner's approval, matching Language Miner's hosting approach while keeping Hiroshi's app identity separate.
 
 GitHub Pages serves guided conversations, lessons, homework, and offline practice. It cannot run this app's AI server. The Pages package explicitly disables AI API requests and uses its own installation link. The local and Sites builds retain their existing AI backend configuration.
 

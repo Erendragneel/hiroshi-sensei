@@ -3,6 +3,6 @@
 export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',
-  phoneURL: 'https://koa-personal-companion.elijio-villa.chatgpt.site/play/',
+  phoneURL: 'https://erendragneel.github.io/hiroshi-sensei/',
   apiBase: '/api',
 });
