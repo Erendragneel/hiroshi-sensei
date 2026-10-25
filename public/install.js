@@ -1,6 +1,6 @@
 // Browsers expose installation in different ways. Keep an accessible route to
 // instructions even when a native install prompt is unavailable or dismissed.
-import { APP_CONFIG } from './app-config.js?v=20261025-chatgpt-update';
+import { APP_CONFIG } from './app-config.js?v=20261026-github-install';
 export const PHONE_APP_URL = APP_CONFIG.phoneURL;
 
 export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sensei', getConnection = () => ({configured:false, provider:'none'}), phoneURL = PHONE_APP_URL, onExportBackup = null}) {
@@ -26,7 +26,7 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     return button;
   };
   function refresh() {
-    const label = isAndroid && androidRelease ? 'Update app' : installed() ? 'App installed' : 'Install app';
+    const label = installed() ? 'App installed' : 'Install app';
     for(const id of ['install-app-label', 'install-label']) {
       const el = document.getElementById(id);
       if(el) el.textContent = label;
@@ -62,7 +62,7 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     section.append(list);
     return section;
   }
-  function androidDownload(label = 'Download Android update') {
+  function androidDownload(label = 'Download optional Android APK') {
     const link = element('a', 'primary-button install-android-download', label);
     link.href = androidRelease.downloadURL;
     link.target = '_blank'; link.rel = 'noopener';
@@ -70,17 +70,17 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
   }
   function androidCard() {
     const card = element('section', 'install-phone-card android-install-card');
-    card.append(element('h3', '', `Android ${androidRelease.version} · ChatGPT connection`), element('p', '', 'The Android app includes Continue with ChatGPT. Open this update link on your Android phone to download the installer.'));
-    card.append(androidDownload(), action('Copy Android update link', 'secondary-button', async () => {
-      try { await navigator.clipboard.writeText(androidRelease.downloadURL); toast('Android update link copied. Open it on your phone.'); }
-      catch { toast('Use the Download Android update link on your phone.'); }
+    card.append(element('h3', '', `Android ${androidRelease.version} · Optional ChatGPT preview`), element('p', '', 'This separate Android preview includes Continue with ChatGPT. It is not required to install the GitHub web game.'));
+    card.append(androidDownload(), action('Copy APK link', 'secondary-button', async () => {
+      try { await navigator.clipboard.writeText(androidRelease.downloadURL); toast('Optional APK link copied.'); }
+      catch { toast('Use the optional Android APK link above.'); }
     }));
     return card;
   }
   function showAndroidUpdate() {
     if(!androidRelease) { showWebInstall(); return; }
-    const container = openModal('Get ChatGPT update', 'HIROSHI SENSEI · ANDROID');
-    container.append(element('p', 'modal-intro', 'The Install app button added the web version to your home screen. ChatGPT sign-in is in the separate Android app below. Your web app cannot turn into that Android app automatically.'));
+    const container = openModal('Optional Android preview', 'HIROSHI SENSEI · ADVANCED');
+    container.append(element('p', 'modal-intro', 'The GitHub web game installs from your browser. This optional APK is a separate preview of the Android ChatGPT connection.'));
     container.append(androidCard());
     container.append(instructions('Install, then connect', [
       'Download and open the .apk file, then choose Install or Update. Android may ask you to allow installation from your browser or Files app.',
@@ -99,9 +99,6 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     container.append(notes);
   }
   function show() {
-    // Android users need the APK route even when their web app is installed or
-    // the browser has already offered another PWA installation prompt.
-    if(isAndroid && androidRelease) { showAndroidUpdate(); return; }
     showWebInstall();
   }
   function showWebInstall() {
@@ -116,9 +113,6 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     const intro = element('div');
     intro.append(element('h3', '', installed() ? 'Your own little learning space' : 'One tap away, every day'), element('p', '', installed() ? 'Open your home-screen icon to return to your lessons and conversations.' : 'Add your companion to your home screen and open it like an app.'));
     hero.append(image, intro); container.append(hero);
-
-    if(androidRelease && !isAppleMobile) container.append(androidCard());
-    if(androidRelease && isAppleMobile) container.append(element('p', 'help-note', 'Continue with ChatGPT is currently in the Android preview. This iPhone/iPad web app provides guided practice, lessons, and homework.'));
 
     if(isLocal) {
       const phone = element('section', 'install-phone-card');
@@ -152,7 +146,7 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     note.append(element('h3', '', 'What comes with you'));
     note.append(element('p', '', 'Guided scenes, lessons, homework, and progress are available offline after a complete online visit. Each device keeps its own progress; use Settings → Export backup to move your saved work.'));
     const connection = getConnection();
-    note.append(element('p', '', connection.configured && connection.provider !== 'local' ? 'AI conversation and lesson explanations need an internet connection.' : androidRelease ? 'Guided web practice is ready now. For the ChatGPT connection on Android, use the Android update above and open the installed Android app.' : 'The computer’s on-device AI stays on this computer. The phone app needs a hosted AI connection for free conversation and AI explanations; guided scenes and coursework are ready to use.'));
+    note.append(element('p', '', connection.configured && connection.provider !== 'local' ? 'AI conversation and lesson explanations need an internet connection.' : 'Guided practice is ready now. Live AI availability is shown in Settings; installing this web app does not sign in to ChatGPT.'));
     container.append(note);
   }
   for(const id of ['install-app-button', 'install-button']) document.getElementById(id)?.addEventListener('click', show);
