@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import org.junit.Test;
 
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.Assert.*;
 
@@ -82,6 +83,68 @@ public final class HiroshiInferenceTest {
         body.getJSONArray("messages").getJSONObject(0).put("role", "user").put("content", "a".repeat(2501));
         try { HiroshiInference.buildRequest(body, "model"); fail("Message bound must be enforced"); }
         catch (HiroshiInference.InferenceException expected) { assertEquals("INVALID_MESSAGES", expected.code); }
+    }
+
+    @Test public void validLongAssistantReplyDoesNotBreakTheNextTurn() throws Exception {
+        String priorReply = "a".repeat(3000);
+        String latest = "What does the last sentence mean?";
+        JSONArray history = new JSONArray().put(new JSONObject().put("role", "assistant").put("content", priorReply))
+                .put(new JSONObject().put("role", "user").put("content", latest));
+        JSONObject request = HiroshiInference.buildRequest(payload().put("messages", history), "model");
+        JSONArray input = request.getJSONArray("input");
+        assertEquals(priorReply, input.getJSONObject(0).getString("content"));
+        assertEquals(latest, input.getJSONObject(input.length() - 1).getString("content"));
+    }
+
+    @Test public void longMultibyteHistoryDropsOldestMessagesWithoutTruncatingLatestQuestion() throws Exception {
+        JSONArray history = new JSONArray();
+        for (int i = 0; i < 18; i++) history.put(new JSONObject().put("role", "assistant").put("content", "prior" + i + "あ".repeat(3000)));
+        String latest = "問".repeat(2500);
+        history.put(new JSONObject().put("role", "user").put("content", latest));
+        JSONObject body = payload().put("messages", history);
+        assertTrue(body.toString().getBytes(StandardCharsets.UTF_8).length > 48 * 1024);
+        JSONObject request = HiroshiInference.buildRequest(body, "model");
+        JSONArray input = request.getJSONArray("input"), selectedHistory = new JSONArray();
+        int contentCharacters = 0;
+        for (int i = 0; i < input.length(); i++) {
+            JSONObject item = input.getJSONObject(i);
+            if (!item.getString("content").startsWith("UNTRUSTED REFERENCE DATA")) {
+                selectedHistory.put(item);
+                contentCharacters += item.getString("content").length();
+            }
+        }
+        assertTrue(selectedHistory.length() < history.length());
+        assertFalse(input.getJSONObject(0).getString("content").startsWith("prior0"));
+        assertTrue(contentCharacters <= 24 * 1024);
+        assertTrue(selectedHistory.toString().getBytes(StandardCharsets.UTF_8).length <= 32 * 1024);
+        assertTrue(request.toString().getBytes(StandardCharsets.UTF_8).length <= 48 * 1024);
+        assertEquals(latest, input.getJSONObject(input.length() - 1).getString("content"));
+    }
+
+    @Test public void finalRequestBudgetIncludesLessonAndPersonalizationReferences() throws Exception {
+        JSONArray history = new JSONArray();
+        for (int i = 0; i < 10; i++) history.put(new JSONObject().put("role", "assistant").put("content", "prior" + i + "あ".repeat(3000)));
+        String latest = "問".repeat(2500);
+        history.put(new JSONObject().put("role", "user").put("content", latest));
+        JSONArray memories = new JSONArray(), interests = new JSONArray(), explanations = new JSONArray(), examples = new JSONArray();
+        for (int i = 0; i < 12; i++) memories.put("記".repeat(250));
+        for (int i = 0; i < 10; i++) interests.put("趣".repeat(80));
+        for (int i = 0; i < 3; i++) {
+            explanations.put("説".repeat(280));
+            examples.put(new JSONObject().put("target", "例".repeat(100)).put("reading", "読".repeat(100)).put("meaning", "意".repeat(160)));
+        }
+        JSONObject lesson = new JSONObject().put("lessonId", "greetings").put("title", "題".repeat(100)).put("objective", "目".repeat(220))
+                .put("explanation", explanations).put("examples", examples).put("question", "質".repeat(300))
+                .put("assignmentReview", new JSONObject().put("prompt", "宿".repeat(240)).put("studentAnswer", "答".repeat(400)).put("feedback", "評".repeat(400)));
+        JSONObject body = payload().put("messages", history).put("teacherContext", lesson).put("memories", memories)
+                .put("profile", new JSONObject().put("name", "名".repeat(60)).put("companionName", "師".repeat(60)).put("interests", interests));
+        JSONObject request = HiroshiInference.buildRequest(body, "model");
+        JSONArray input = request.getJSONArray("input");
+        assertTrue(request.toString().getBytes(StandardCharsets.UTF_8).length <= 48 * 1024);
+        assertEquals(latest, input.getJSONObject(input.length() - 1).getString("content"));
+        assertTrue(input.getJSONObject(input.length() - 2).getString("content").contains("assignmentReview"));
+        // The large authored reference remains intact; older history pays the final byte-budget cost.
+        assertTrue(input.length() < 4);
     }
 
     @Test public void teacherDataIsBoundedUntrustedAndCannotCreateGrades() throws Exception {

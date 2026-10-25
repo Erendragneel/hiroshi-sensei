@@ -4,7 +4,7 @@ An original browser game for relaxed conversation with one companion, inspired b
 
 ## Open the game
 
-**Android preview:** A separate [native Hiroshi app](android/README.md) can connect directly through **Continue with ChatGPT**, using an eligible account's existing ChatGPT plan allowance instead of separate API credits. It needs internet and no PC relay. This is a preview: phone sign-in, this account's eligibility, and a completed conversation still need device verification. It does not promise identical model access or reliability to this Codex chat. See the [Android preview release](https://github.com/Erendragneel/hiroshi-sensei/releases/tag/v0.2.0-android-preview.1) for the signed installer and checksums.
+**Android preview:** A separate [native Hiroshi app](android/README.md) can connect directly through **Continue with ChatGPT**, using an eligible account's existing ChatGPT plan allowance instead of separate API credits. It needs internet and no PC relay. This is a preview: phone sign-in, this account's eligibility, and a completed conversation still need device verification. It does not promise identical model access or reliability to this Codex chat. See the [Android preview release](https://github.com/Erendragneel/hiroshi-sensei/releases/tag/v0.2.1-android-preview.2) for the signed installer and checksums.
 
 On your phone, open [Hiroshi sensei](https://erendragneel.github.io/hiroshi-sensei/) in Safari or Chrome and tap **Install app** at the top of the game. The app shows the browser's install prompt when available, or the steps for adding it to your home screen. The GitHub Pages version opens without a ChatGPT sign-in. iPhone installation uses Safari → Share → Add to Home Screen.
 
