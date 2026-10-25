@@ -36,3 +36,13 @@
 .chat-transfer-steps{padding-left:23px;margin:20px 0;color:#728266;line-height:1.9}
 .chat-transfer-steps li{padding-left:4px;margin-bottom:10px}
 @media(max-width:700px){.has-private-chat .header-actions{justify-content:space-between}.ai-chat-link{flex-basis:100%;min-height:44px;font-size:13px}.ai-chat-note{font-size:12px;line-height:1.8;padding:13px 14px;margin-bottom:20px}.chat-transfer-steps{font-size:13px}}
+/* Android delivery is separate from adding the web game to a home screen. */
+.android-update-banner{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 0 24px;padding:22px 24px;border:1px solid #d3dec9;border-radius:16px;background:#edf3e7;color:var(--green)}
+.android-update-banner[hidden]{display:none}
+.android-update-copy{max-width:660px}.android-update-copy .eyebrow{margin:0 0 7px;color:#76896b;font-size:10px;letter-spacing:1.4px}
+.android-update-copy h2{font-size:20px;letter-spacing:-.5px;margin:0 0 9px}.android-update-copy p{font-size:12px;line-height:1.7;margin:0 0 7px;color:#52694e}.android-update-copy p.android-update-small{font-size:10px;color:#75856b;margin-bottom:0}
+.android-update-actions{display:flex;flex-direction:column;gap:9px;flex-shrink:0;min-width:190px}.android-download-action{display:inline-flex;justify-content:center;align-items:center;gap:8px;text-decoration:none;text-align:center;white-space:nowrap}.android-download-action svg{width:16px;height:16px}.android-progress-help{color:var(--green);font-size:11px;text-decoration:underline;text-underline-offset:3px;padding:4px}
+.has-android-update .page-header{margin-bottom:18px}.install-android-actions{display:flex;gap:10px;flex-wrap:wrap}
+.web-update-notice{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:150;max-width:min(620px,calc(100vw - 30px));padding:18px 20px;border:1px solid #c9d7c1;border-radius:14px;box-shadow:0 12px 40px #243c2425;background:#fbfcf7;color:#305348}.web-update-notice p{font-size:12px;line-height:1.6;margin:8px 0 12px}.web-update-notice .action-row{margin:0}.web-update-notice [hidden]{display:none}
+.web-update-notice[hidden]{display:none}.web-update-actions{display:flex;gap:9px;flex-wrap:wrap}
+@media(max-width:700px){.android-update-banner{display:block;padding:17px 18px;margin-bottom:20px}.android-update-copy h2{font-size:19px}.android-update-copy p{font-size:12px}.android-update-actions{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;min-width:0;gap:9px}.android-download-action{grid-column:1/-1;min-height:46px}.android-update-actions .secondary-button{font-size:11px;padding:10px}.android-progress-help{font-size:11px}.web-update-notice{bottom:90px;width:calc(100vw - 30px)}}

@@ -11,8 +11,8 @@ const edit = async (file, transform) => {
   const target = path.join(destination, file);
   await fs.writeFile(target, transform(await fs.readFile(target,'utf8')));
 };
-await edit('index.html', text => text.replace('<script src="./app.js" type="module"></script>',
-  '<script src="./native-bootstrap.js"></script>\n  <script src="./app.js" type="module"></script>')
+await edit('index.html', text => text.replace(/<script src="\.\/app\.js(?:\?[^\"]*)?" type="module"><\/script>/,
+  match => '<script src="./native-bootstrap.js"></script>\n  '+match)
   .replace('<meta charset="UTF-8">','<meta charset="UTF-8">\n  <meta http-equiv="Content-Security-Policy" content="default-src \'self\' data: blob:; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' data: blob:; connect-src \'self\'; frame-src \'none\'; object-src \'none\'; base-uri \'none\'">')
   .replace('<link rel="manifest" href="./manifest.webmanifest">','<link rel="stylesheet" href="./native.css">')
   .replace('class="brand" href="./"','class="brand" href="#message-input"')
@@ -46,4 +46,5 @@ await edit('app.js', text => {
 });
 await fs.copyFile(path.join(android,'web/native-bootstrap.js'),path.join(destination,'native-bootstrap.js'));
 await fs.copyFile(path.join(android,'web/native.css'),path.join(destination,'native.css'));
+if(!(await fs.readFile(path.join(destination,'index.html'),'utf8')).includes('<script src="./native-bootstrap.js"></script>'))throw new Error('The native credential bridge was not added to the bundled game.');
 console.log('Staged bundled Hiroshi UI with native-only ChatGPT connection.');

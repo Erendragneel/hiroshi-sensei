@@ -1,4 +1,5 @@
 #install-app-button,#install-button{display:none}
+.android-update-banner{display:none!important}
 .native-account{margin:0 0 20px;padding:16px 18px;border:1px solid #d9e3dc;border-radius:16px;background:#f4f8f3;color:#305348;display:flex;gap:16px;align-items:center;justify-content:space-between}
 .native-account p{font-size:12px;line-height:1.6;margin:5px 0 0;max-width:560px}
 .native-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;flex-shrink:0;max-width:430px}

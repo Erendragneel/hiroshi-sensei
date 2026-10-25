@@ -51,11 +51,13 @@ for (const relativePath of files) {
   await copyFile(path.join(source, relativePath), destination);
 }
 await writeFile(path.join(output, '.nojekyll'), '');
-await writeFile(path.join(output, 'app-config.js'), `export const APP_CONFIG = Object.freeze({
+await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261025-chatgpt-update';
+export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',
   phoneURL: 'https://erendragneel.github.io/hiroshi-sensei/',
-  aiAppURL: 'https://koa-personal-companion.elijio-villa.chatgpt.site/play/',
+  aiAppURL: null,
+  androidApp: ANDROID_RELEASE,
   apiBase: null
 });
 `);
