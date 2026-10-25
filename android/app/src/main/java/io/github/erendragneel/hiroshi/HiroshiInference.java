@@ -161,7 +161,7 @@ public final class HiroshiInference {
         connection.setReadTimeout(READ_TIMEOUT_MS);
         connection.setRequestProperty("Authorization", "Bearer " + accessToken);
         connection.setRequestProperty("Accept", "application/json");
-        connection.setRequestProperty("User-Agent", "HiroshiSenseiAndroid/0.2.1");
+        connection.setRequestProperty("User-Agent", "HiroshiSenseiAndroid/"+BuildConfig.VERSION_NAME);
         return connection;
     }
 

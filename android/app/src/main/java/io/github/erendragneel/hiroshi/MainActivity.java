@@ -8,6 +8,7 @@ import android.content.ClipboardManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
+import android.webkit.JsResult;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -121,6 +122,19 @@ public final class MainActivity extends ComponentActivity {
             }
         });
         web.setWebChromeClient(new WebChromeClient(){
+            @Override public boolean onJsAlert(WebView view,String url,String message,JsResult result){
+                if(closed||isFinishing()){result.cancel();return true;}
+                new AlertDialog.Builder(MainActivity.this).setTitle("Hiroshi sensei").setMessage(message)
+                    .setPositiveButton("Got it",(dialog,which)->result.confirm()).setOnCancelListener(dialog->result.cancel()).show();
+                return true;
+            }
+            @Override public boolean onJsConfirm(WebView view,String url,String message,JsResult result){
+                if(closed||isFinishing()){result.cancel();return true;}
+                new AlertDialog.Builder(MainActivity.this).setTitle("Hiroshi sensei").setMessage(message)
+                    .setPositiveButton("Continue",(dialog,which)->result.confirm()).setNegativeButton("Cancel",(dialog,which)->result.cancel())
+                    .setOnCancelListener(dialog->result.cancel()).show();
+                return true;
+            }
             @Override public boolean onShowFileChooser(WebView view,ValueCallback<Uri[]> callback,FileChooserParams parameters){
                 if(fileCallback!=null)fileCallback.onReceiveValue(null);fileCallback=callback;
                 Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json");
@@ -139,6 +153,37 @@ public final class MainActivity extends ComponentActivity {
         if(closed)return;
         try { requests.execute(work); }
         catch(RejectedExecutionException ignored) { /* The Activity closed before this queued callback. */ }
+    }
+
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        // This link only returns to the existing screen. It carries no code,
+        // token or permission, and never changes the native sign-in state.
+        if(isSignInReturn(intent))connectionChanged();
+    }
+
+    static boolean isSignInReturn(Intent intent){
+        if(intent==null||!Intent.ACTION_VIEW.equals(intent.getAction()))return false;
+        Uri uri=intent.getData();
+        return uri!=null&&"hiroshi-sensei".equals(uri.getScheme())&&"signin-complete".equals(uri.getHost())
+            &&uri.getPort()==-1&&uri.getUserInfo()==null&&(uri.getPath()==null||uri.getPath().isEmpty()||"/".equals(uri.getPath()))
+            &&uri.getQuery()==null&&uri.getFragment()==null;
+    }
+
+    private String connectionReport(){
+        JSONObject details=auth==null?new JSONObject():auth.connectionDiagnostics();
+        StringBuilder report=new StringBuilder("Hiroshi sensei ").append(BuildConfig.VERSION_NAME)
+            .append("\nAndroid API ").append(android.os.Build.VERSION.SDK_INT);
+        appendConnectionField(report,"Stage",details.optString("connectionStage",details.optString("stage")),"[A-Z0-9_]{1,60}");
+        appendConnectionField(report,"Error",details.optString("errorCode"),"[A-Za-z0-9_]{1,100}");
+        int status=details.optInt("httpStatus");if(status>=100&&status<=599)report.append("\nHTTP ").append(status);
+        appendConnectionField(report,"Request",details.optString("requestId"),"[A-Za-z0-9._:-]{1,160}");
+        appendConnectionField(report,"Exception",details.optString("exceptionClass"),"[A-Za-z_$][A-Za-z0-9_.$]{0,199}");
+        return report.toString();
+    }
+
+    private static void appendConnectionField(StringBuilder report,String label,String value,String pattern){
+        if(value.matches(pattern))report.append('\n').append(label).append(": ").append(value);
     }
 
     /** A local, message-free diagnostic report; nothing is uploaded automatically. */
@@ -179,6 +224,14 @@ public final class MainActivity extends ComponentActivity {
     private void connectionChanged(){runOnUiThread(()->{if(web!=null&&!closed)web.evaluateJavascript("window.__hiroshiConnectionChanged&&window.__hiroshiConnectionChanged();",null);});}
     private void showError(String message){if(!isFinishing()&&!closed)new AlertDialog.Builder(this).setMessage(message).setPositiveButton("OK",null).show();}
     private final class Bridge {
+        @JavascriptInterface public void copyConnectionDetails(){
+            if(closed)return;
+            runOnUiThread(()->{
+                if(closed)return;
+                ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+                if(clipboard!=null){clipboard.setPrimaryClip(ClipData.newPlainText("Hiroshi connection report",connectionReport()));Toast.makeText(MainActivity.this,"Connection details copied",Toast.LENGTH_SHORT).show();}
+            });
+        }
         @JavascriptInterface public void request(String id,String action,String raw){
             if(closed||id==null||!id.matches("[0-9]{1,12}")||raw==null||raw.length()>120000)return;
             if(active.size()>=8){error(id,429,"BUSY","Please finish the current request first.");return;}

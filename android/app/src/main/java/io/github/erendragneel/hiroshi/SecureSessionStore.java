@@ -22,12 +22,17 @@ public final class SecureSessionStore {
     private static final String ALIAS = "io.github.erendragneel.hiroshi.session.v1";
     private static final byte[] AAD = ALIAS.getBytes(StandardCharsets.UTF_8);
     private final SharedPreferences preferences;
+    interface KeySource { SecretKey get() throws GeneralSecurityException, IOException; }
+    private final KeySource keys;
 
-    public SecureSessionStore(Context context) {
+    public SecureSessionStore(Context context) { this(context,null); }
+    SecureSessionStore(Context context, KeySource keySource) {
         preferences = context.getApplicationContext().getSharedPreferences("hiroshi_secure_session_v1", Context.MODE_PRIVATE);
+        keys=keySource==null?this::androidKey:keySource;
     }
 
-    private SecretKey key() throws GeneralSecurityException, IOException {
+    private SecretKey key() throws GeneralSecurityException, IOException { return keys.get(); }
+    private SecretKey androidKey() throws GeneralSecurityException, IOException {
         KeyStore store = KeyStore.getInstance("AndroidKeyStore");
         store.load(null);
         if (store.containsAlias(ALIAS)) return (SecretKey) store.getKey(ALIAS, null);

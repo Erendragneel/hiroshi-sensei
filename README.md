@@ -4,13 +4,15 @@ An original browser game for relaxed conversation with one companion, inspired b
 
 ## Open the game
 
-Open [the updated Hiroshi game](https://erendragneel.github.io/hiroshi-sensei/?update=android-022). On Android, **Get ChatGPT update** downloads the signed Android installer, and **Update app** opens the steps. The old **Install app** action added the browser/PWA version; it did not install the Android ChatGPT connection.
+Open [the updated Hiroshi game](https://erendragneel.github.io/hiroshi-sensei/?update=android-023). On Android, **Get ChatGPT update** downloads the signed Android installer, and **Update app** opens the steps. The old **Install app** action added the browser/PWA version; it did not install the Android ChatGPT connection.
 
-1. Download and open **hiroshi-sensei-0.2.2.apk** on your phone. Follow Android's installation steps.
-2. Open the installed **Hiroshi sensei** Android app, then choose **Continue with ChatGPT** at the top. Complete sign-in in the phone's system browser and return to Hiroshi.
+1. Download and open **hiroshi-sensei-0.2.3.apk** on your phone. Install it over the existing Hiroshi app to retain its data; do not uninstall first.
+2. Open the installed **Hiroshi sensei** Android app, then choose **Continue with ChatGPT** at the top. Complete sign-in in the phone's system browser and tap **Open Hiroshi sensei**.
 3. Choose an offered model and send a real message. Account eligibility and successful inference must be verified on the device before calling the connection working.
 
-The [Android preview](android/README.md) uses an eligible account's existing ChatGPT plan allowance, internet, and no PC relay or separate API key. Plan/app limits apply. It does not promise identical model access or reliability to this Codex chat. [Release and signed installer](https://github.com/Erendragneel/hiroshi-sensei/releases/tag/v0.2.2-android-preview.3).
+The [Android preview](android/README.md) uses an eligible account's existing ChatGPT plan allowance, internet, and no PC relay or separate API key. Plan/app limits apply. It does not promise identical model access or reliability to this Codex chat. [Release and signed installer](https://github.com/Erendragneel/hiroshi-sensei/releases/tag/v0.2.3-android-preview.4).
+
+Version 0.2.3 preserves an encrypted, short-lived verification checkpoint when browser approval and token exchange succeed but identity verification is interrupted. Choosing **Continue with ChatGPT** can resume verification without repeating browser approval. Connection failures appear in the app's connection card with a **Copy connection details** button for a credential-free report; nothing is uploaded automatically. Complete sign-in flow tests use local registration, browser callback, signed identity, encryption, refresh, and failure fixtures. No live account sign-in was tested, and the exact failure on the reported phone remains unconfirmed. The Android 16 startup fix from 0.2.2 is retained.
 
 Your existing web-game progress stays in its browser storage. To move it, choose **Keep your saved progress** and export a backup before installing, then restore the file through Settings inside the Android app. Restoring requires review and replaces the destination app's saved work; no automatic transfer or reset occurs.
 

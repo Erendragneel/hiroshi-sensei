@@ -18,8 +18,8 @@ await edit('index.html', text => text.replace(/<script src="\.\/app\.js(?:\?[^\"
   .replace('class="brand" href="./"','class="brand" href="#message-input"')
   .replace('</header>', `</header>
       <section class="native-account" aria-label="ChatGPT connection">
-        <div><strong id="native-status">Connect your ChatGPT plan</strong><p id="native-detail">Strong cloud AI, with your PC off. Internet and an eligible ChatGPT plan are required. This uses your plan’s allowance.</p></div>
-        <div class="native-actions"><button class="primary-button" id="native-connect" type="button">Continue with ChatGPT</button><label id="native-model-wrap" hidden>AI model <select id="native-model" aria-label="AI model"></select></label><a href="https://chatgpt.com/#settings/Usage">Manage usage ↗</a><button class="secondary-button" id="native-disconnect" type="button" hidden>Disconnect</button></div>
+        <div><strong id="native-status">Connect your ChatGPT plan</strong><p id="native-detail" aria-live="polite">Strong cloud AI, with your PC off. Internet and an eligible ChatGPT plan are required. This uses your plan’s allowance.</p></div>
+        <div class="native-actions"><button class="primary-button" id="native-connect" type="button">Continue with ChatGPT</button><label id="native-model-wrap" hidden>AI model <select id="native-model" aria-label="AI model"></select></label><a href="https://chatgpt.com/#settings/Usage">Manage usage ↗</a><button class="secondary-button" id="native-disconnect" type="button" hidden>Disconnect</button><button class="secondary-button native-copy-connection" id="native-copy-connection" type="button" hidden>Copy connection details</button></div>
       </section>`));
 await fs.writeFile(path.join(destination,'app-config.js'), `export const APP_CONFIG = Object.freeze({id:'hiroshi-sensei',name:'Hiroshi sensei',apiBase:'/api',aiAppURL:null,native:true});\n`);
 await edit('app.js', text => {

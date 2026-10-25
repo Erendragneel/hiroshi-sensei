@@ -30,8 +30,10 @@ public final class HiroshiAuth implements AutoCloseable {
     private static final String RESOURCE = "https://api.openai.com/v1";
     private static final String SCOPES = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct";
     private static final long SIGN_IN_TIMEOUT_MS = 300000;
+    private static final long PENDING_MAX_AGE_MS = 600000;
     private static final SecureRandom RANDOM = new SecureRandom();
     private final SecureSessionStore store;
+    private final Transport transport;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     // Activity recreation can leave an older instance finishing a token rotation.
@@ -42,11 +44,14 @@ public final class HiroshiAuth implements AutoCloseable {
     private volatile Attempt attempt;
     private volatile String message = "Continue with ChatGPT to connect Hiroshi.";
     private volatile boolean closed;
+    private volatile String connectionStage="READY",errorCode="",requestId="",exceptionClass="";
+    private volatile int httpStatus;
     private JSONObject discovery;
     private JSONObject cachedJwks;
     private long jwksAt;
 
     public interface Callback { void onComplete(JSONObject safeStatus, String error); }
+    interface Transport { String request(String endpoint, String method, String body) throws Exception; }
     public static final class AuthException extends Exception {
         public final String code;
         public AuthException(String message) { this("AUTH_FAILED", message); }
@@ -58,15 +63,19 @@ public final class HiroshiAuth implements AutoCloseable {
         final Callback callback;
         volatile ServerSocket listener;
         volatile boolean cancelled;
+        volatile boolean ownerClosed;
         Attempt(long epoch, Callback callback) { this.epoch = epoch; this.callback = callback; }
         void stop() { cancelled = true; try { if (listener != null) listener.close(); } catch (IOException ignored) { } }
     }
     private static final class HttpFailure extends Exception {
-        final int status; final String code;
-        HttpFailure(int status, String code) { this.status = status; this.code = code; }
+        final int status; final String code,requestId;
+        HttpFailure(int status, String code, String requestId) { this.status=status;this.code=code;this.requestId=requestId; }
     }
 
-    public HiroshiAuth(Context context) { store = new SecureSessionStore(context); }
+    public HiroshiAuth(Context context) { this(new SecureSessionStore(context), HiroshiAuth::requestHttps); }
+    HiroshiAuth(SecureSessionStore store, Transport transport) {
+        this.store=Objects.requireNonNull(store,"store");this.transport=Objects.requireNonNull(transport,"transport");
+    }
 
     /** Safe account summary only; neither tokens nor authorization URLs are returned. */
     public JSONObject status() {
@@ -77,12 +86,37 @@ public final class HiroshiAuth implements AutoCloseable {
             result.put("signedIn", signedIn).put("planEnabled", signedIn && record.optBoolean("plan_enabled"))
                     .put("email", signedIn ? record.optString("email") : "")
                     .put("displayName", signedIn ? record.optString("display_name") : "")
-                    .put("busy", attempt != null).put("message", message);
-        } catch (Exception ignored) {
+                    .put("busy", attempt != null).put("message", message)
+                    .put("connectionStage",connectionStage).put("errorCode",errorCode).put("httpStatus",httpStatus)
+                    .put("requestId",requestId);
+        } catch (Exception failure) {
+            recordFailure(failure);
             try { result.put("signedIn", false).put("planEnabled", false).put("email", "").put("displayName", "")
-                    .put("busy", false).put("message", "The saved connection cannot be unlocked. Reinstall Hiroshi to reset this phone's connection."); } catch (Exception impossible) { }
+                    .put("busy", false).put("message", "Hiroshi could not unlock the saved ChatGPT connection. Your game progress is safe. Copy connection details to identify the problem.")
+                    .put("connectionStage",connectionStage).put("errorCode",errorCode).put("httpStatus",httpStatus).put("requestId",requestId); } catch (Exception impossible) { }
         }
         return result;
+    }
+
+    /** Deliberately excludes account information, authorization URLs and all credentials. */
+    public JSONObject connectionDiagnostics() {
+        JSONObject report=new JSONObject();
+        try { report.put("connectionStage",connectionStage).put("errorCode",errorCode).put("httpStatus",httpStatus)
+                .put("requestId",requestId).put("exceptionClass",exceptionClass); } catch(Exception ignored){ }
+        return report;
+    }
+
+    private void beginConnection() { errorCode="";httpStatus=0;requestId="";exceptionClass="";connectionStage="STARTING"; }
+    private void recordFailure(Exception failure) {
+        exceptionClass=failure.getClass().getSimpleName();
+        if(failure instanceof HttpFailure) {
+            HttpFailure http=(HttpFailure)failure;httpStatus=http.status;requestId=safeRequestId(http.requestId);
+            errorCode=knownProviderCode(http.code)?http.code:"AUTH_HTTP_ERROR";
+        } else if(failure instanceof AuthException) errorCode=((AuthException)failure).code;
+        else if(failure instanceof org.json.JSONException)errorCode="AUTH_RESPONSE_UNREADABLE";
+        else if(failure instanceof java.security.GeneralSecurityException)errorCode="SECURE_STORAGE_UNAVAILABLE";
+        else if(failure instanceof IOException)errorCode=isSavingStage()?"SECURE_SESSION_SAVE_FAILED":"AUTH_CONNECTION_INTERRUPTED";
+        else errorCode="AUTH_SETUP_FAILED";
     }
 
     public void signIn(Activity activity, Callback callback) {
@@ -99,66 +133,112 @@ public final class HiroshiAuth implements AutoCloseable {
 
     private void runSignIn(Attempt current, WeakReference<Activity> activityRef) {
         String error = null;
+        beginConnection();
         try {
             JSONObject metadata = metadata();
             JSONObject existing;
             String hostId;
-            synchronized (sessionLock) { requireActive(current); hostId = store.hostId(); existing = store.read(); }
-            String savedClient = existing.optString("client_id", existing.optString("pending_client_id", ""));
-            current.listener = new ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"));
-            current.listener.setSoTimeout(1000);
-            String redirect = "http://127.0.0.1:" + current.listener.getLocalPort() + "/auth/callback";
-            Map<String, String> parameters = new LinkedHashMap<>();
-            parameters.put("client_id", savedClient.isEmpty() ? "dynamic_agent_client" : savedClient);
-            if (savedClient.isEmpty()) parameters.put("agent_name_hint", "Hiroshi sensei");
-            parameters.put("ext_agent_host_id", hostId); parameters.put("response_type", "code");
-            parameters.put("redirect_uri", redirect); parameters.put("scope", SCOPES); parameters.put("resource", RESOURCE);
-            parameters.put("state", current.state); parameters.put("nonce", current.nonce);
-            parameters.put("code_challenge_method", "S256"); parameters.put("code_challenge", challenge(current.verifier));
-            if (!savedClient.isEmpty() && !existing.optString("id_token").isEmpty()) parameters.put("id_token_hint", existing.optString("id_token"));
-            if (!savedClient.isEmpty() && !existing.optString("email").isEmpty()) parameters.put("login_hint", existing.optString("email"));
-            if (!savedClient.isEmpty() && !existing.optBoolean("plan_enabled")) parameters.put("prompt", "consent");
-            String authorization = metadata.getString("authorization_endpoint") + "?" + encodeForm(parameters);
-            requireActive(current);
-            message = "Finish Continue with ChatGPT in your browser, then return to Hiroshi.";
-            main.post(() -> {
-                Activity owner = activityRef.get();
-                if (!isActive(current)) return;
-                if (owner == null || owner.isFinishing() || owner.isDestroyed()) { current.stop(); return; }
-                try { owner.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(authorization)).addCategory(Intent.CATEGORY_BROWSABLE)); }
-                catch (RuntimeException ignored) { current.stop(); }
-            });
-            Map<String, String> returned = listen(current);
-            requireActive(current);
-            String clientId = returned.getOrDefault("client_id", savedClient);
-            if (clientId == null || !clientId.matches("[A-Za-z0-9_-]{4,256}") || "dynamic_agent_client".equals(clientId)
-                    || (!savedClient.isEmpty() && !savedClient.equals(clientId))) throw new AuthException("The sign-in registration did not match. Please start again.");
-            if (savedClient.isEmpty()) synchronized (sessionLock) {
-                requireActive(current); JSONObject pending = store.read(); pending.put("pending_client_id", clientId); store.write(pending);
+            synchronized (sessionLock) { requireActive(current); hostId=store.hostId();existing=store.read(); }
+            JSONObject pending=existing.optJSONObject("pending_verification");
+            if(pending!=null&&!validCheckpoint(pending,existing,hostId)) {
+                clearCheckpoint(current);pending=null;existing=store.read();
+            }
+            if(pending==null) {
+                String savedClient=existing.optString("client_id",existing.optString("pending_client_id",""));
+                current.listener=new ServerSocket(0,8,InetAddress.getByName("127.0.0.1"));
+                current.listener.setSoTimeout(1000);
+                String redirect="http://127.0.0.1:"+current.listener.getLocalPort()+"/auth/callback";
+                Map<String,String> parameters=new LinkedHashMap<>();
+                parameters.put("client_id",savedClient.isEmpty()?"dynamic_agent_client":savedClient);
+                if(savedClient.isEmpty())parameters.put("agent_name_hint","Hiroshi sensei");
+                parameters.put("ext_agent_host_id",hostId);parameters.put("response_type","code");
+                parameters.put("redirect_uri",redirect);parameters.put("scope",SCOPES);parameters.put("resource",RESOURCE);
+                parameters.put("state",current.state);parameters.put("nonce",current.nonce);
+                parameters.put("code_challenge_method","S256");parameters.put("code_challenge",challenge(current.verifier));
+                if(!savedClient.isEmpty()&&!existing.optString("id_token").isEmpty())parameters.put("id_token_hint",existing.optString("id_token"));
+                if(!savedClient.isEmpty()&&!existing.optString("email").isEmpty())parameters.put("login_hint",existing.optString("email"));
+                if(!savedClient.isEmpty()&&!existing.optBoolean("plan_enabled"))parameters.put("prompt","consent");
+                String authorization=metadata.getString("authorization_endpoint")+"?"+encodeForm(parameters);
+                requireActive(current);connectionStage="BROWSER";
+                message="Finish Continue with ChatGPT in your browser, then return to Hiroshi.";
+                main.post(()->{
+                    Activity owner=activityRef.get();if(!isActive(current))return;
+                    if(owner==null||owner.isFinishing()||owner.isDestroyed()){current.stop();return;}
+                    try{owner.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(authorization)).addCategory(Intent.CATEGORY_BROWSABLE));}
+                    catch(RuntimeException ignored){current.stop();}
+                });
+                Map<String,String> returned=listen(current);requireActive(current);
+                String clientId=returned.getOrDefault("client_id",savedClient);
+                if(clientId==null||!clientId.matches("[A-Za-z0-9_-]{4,256}")||"dynamic_agent_client".equals(clientId)
+                        ||(!savedClient.isEmpty()&&!savedClient.equals(clientId)))throw new AuthException("The sign-in registration did not match. Please start again.");
+                if(savedClient.isEmpty())synchronized(sessionLock){requireActive(current);connectionStage="SAVING_REGISTRATION";JSONObject saved=store.read();saved.put("pending_client_id",clientId);store.write(saved);}
+                synchronized(refreshLock) {
+                    requireActive(current);connectionStage="TOKEN_EXCHANGE";
+                    message="ChatGPT returned to Hiroshi. Finishing your connection…";
+                    JSONObject tokens=postForm(TOKEN,form("grant_type","authorization_code","client_id",clientId,
+                            "code",returned.get("code"),"code_verifier",current.verifier,"redirect_uri",redirect,"resource",RESOURCE));
+                    pending=new JSONObject().put("tokens",tokens).put("client_id",clientId).put("host_id",hostId)
+                            .put("nonce",current.nonce).put("created_at",System.currentTimeMillis())
+                            .put("expected_subject",existing.optString("subject"));
+                    // This encrypted checkpoint is not an authenticated session. Never expose
+                    // its credentials to the browser or use them before identity validation.
+                    synchronized(sessionLock){
+                        // Closing an Activity must not lose an already consumed code.
+                        // This only preserves an unverified encrypted checkpoint; a
+                        // closed owner can never activate the returned credentials.
+                        if(current.epoch!=epoch.get()||(!isActive(current)&&!current.ownerClosed))requireActive(current);
+                        connectionStage="SAVING_CHECKPOINT";
+                        JSONObject saved=store.read();saved.put("pending_verification",pending);store.write(saved);
+                    }
+                }
             }
             JSONObject record;
-            synchronized (refreshLock) {
-                // Do not exchange/commit a new authorization while another owner
-                // is rotating the same account's refresh token.
-                requireActive(current);
-                JSONObject tokens = postForm(TOKEN, form("grant_type", "authorization_code", "client_id", clientId,
-                        "code", returned.get("code"), "code_verifier", current.verifier, "redirect_uri", redirect, "resource", RESOURCE));
-                JSONObject claims = verifyIdentity(tokens.optString("id_token"), clientId, current.nonce);
-                if (!savedClient.isEmpty() && !existing.optString("subject").isEmpty()
-                        && !existing.optString("subject").equals(claims.optString("sub"))) throw new AuthException("The signed-in account did not match the saved connection.");
-                record = tokenRecord(tokens, claims, clientId, hostId, null);
-                synchronized (sessionLock) { requireActive(current); store.write(record); epoch.incrementAndGet(); }
+            synchronized(refreshLock) { record=finishCheckpoint(current,pending,hostId); }
+            if(!record.optBoolean("plan_enabled"))error="Signed in, but ChatGPT plan usage was not approved. Continue with ChatGPT again to enable it.";
+            connectionStage=record.optBoolean("plan_enabled")?"CONNECTED":"SIGNED_IN";
+            message=error==null?"ChatGPT is connected. Hiroshi can use this account's available models and plan allowance.":error;
+            if(error!=null)errorCode="PLAN_PERMISSION_REQUIRED";
+        } catch(Exception failure) {
+            recordFailure(failure);
+            if(failure instanceof AuthException&&"VERIFYING_IDENTITY".equals(connectionStage)) {
+                try{clearCheckpoint(current);}catch(Exception ignored){ }
             }
-            if (!record.optBoolean("plan_enabled")) error = "Signed in, but ChatGPT plan usage was not approved. Continue with ChatGPT again to enable it.";
-            message = error == null ? "ChatGPT is connected. Hiroshi can use the models and allowance available to this account." : error;
-        } catch (Exception failure) {
-            error = friendly(failure);
-            if (isActive(current)) message = error;
+            error=friendly(failure);
+            if(isActive(current))message=error;
         } finally {
-            current.stop();
-            synchronized (sessionLock) { if (attempt == current) attempt = null; }
-            complete(current.callback, error);
+            current.stop();synchronized(sessionLock){if(attempt==current)attempt=null;}
+            complete(current.callback,error);
         }
+    }
+
+    private boolean validCheckpoint(JSONObject pending,JSONObject saved,String host) {
+        long created=pending.optLong("created_at"),now=System.currentTimeMillis();
+        String client=pending.optString("client_id");
+        String expected=saved.optString("client_id",saved.optString("pending_client_id",""));
+        return created>0&&created<=now+30000&&now-created<=PENDING_MAX_AGE_MS
+                &&host.equals(pending.optString("host_id"))&&client.equals(expected)
+                &&client.matches("[A-Za-z0-9_-]{4,256}")&&!"dynamic_agent_client".equals(client)
+                &&pending.optString("nonce").matches("[A-Za-z0-9_-]{32,128}")
+                &&pending.optJSONObject("tokens")!=null;
+    }
+
+    private JSONObject finishCheckpoint(Attempt current,JSONObject pending,String host) throws Exception {
+        requireActive(current);connectionStage="VERIFYING_IDENTITY";message="Verifying your ChatGPT sign-in…";
+        String client=pending.getString("client_id");JSONObject tokens=pending.getJSONObject("tokens");
+        // The locally encrypted receipt is bounded to ten minutes and bound to
+        // this installation/client/nonce. Validate identity as of that receipt;
+        // delayed verification must not extend the API token's original expiry.
+        JSONObject claims=verifyIdentity(tokens.optString("id_token"),client,pending.getString("nonce"),pending.getLong("created_at"));
+        String expected=pending.optString("expected_subject");
+        if(!expected.isEmpty()&&!expected.equals(claims.optString("sub")))throw new AuthException("The signed-in account did not match the saved connection.");
+        JSONObject record=tokenRecord(tokens,claims,client,host,null,pending.getLong("created_at"));
+        connectionStage="SAVING_SESSION";
+        synchronized(sessionLock){requireActive(current);store.write(record);epoch.incrementAndGet();}
+        return record;
+    }
+
+    private void clearCheckpoint(Attempt current) throws Exception {
+        synchronized(sessionLock){requireActive(current);JSONObject saved=store.read();saved.remove("pending_verification");store.write(saved);}
     }
 
     private Map<String, String> listen(Attempt current) throws Exception {
@@ -178,7 +258,7 @@ public final class HiroshiAuth implements AutoCloseable {
                     if ("ACCESS_DENIED".equals(invalid.code) || "OAUTH_ERROR".equals(invalid.code)) throw invalid;
                     continue;
                 }
-                respond(socket, "200 OK", "Sign-in received. You can close this tab and return to Hiroshi sensei.");
+                respond(socket, "200 OK", "Your approval returned to Hiroshi. The app is finishing your connection.");
                 current.listener.close(); return parameters;
             } catch (SocketTimeoutException ignored) { }
         }
@@ -235,8 +315,13 @@ public final class HiroshiAuth implements AutoCloseable {
 
     /** Cancel the temporary browser flow; an existing validated connection is retained. */
     public void cancelSignIn() {
-        Attempt current = attempt;
-        if (current != null) { current.stop(); message = "Sign-in cancelled. You can try Continue with ChatGPT again."; }
+        synchronized(sessionLock) {
+            Attempt current = attempt;
+            if (current != null) {
+                current.ownerClosed=false;current.stop();
+                message = "Sign-in cancelled. You can try Continue with ChatGPT again.";
+            }
+        }
     }
 
     /** Clear locally first. Network revocation is best effort and never restores cleared credentials. */
@@ -256,7 +341,15 @@ public final class HiroshiAuth implements AutoCloseable {
         });
     }
 
-    @Override public void close() { closed = true; cancelSignIn(); executor.shutdownNow(); }
+    @Override public void close() {
+        synchronized(sessionLock) {
+            Attempt current=attempt;
+            if(current!=null&&!current.cancelled)current.ownerClosed=true;
+            closed=true;
+            if(current!=null)current.stop();
+        }
+        executor.shutdownNow();
+    }
 
     private boolean isActive(Attempt value) { return !closed && attempt == value && !value.cancelled && value.epoch == epoch.get(); }
     private void requireActive(Attempt value) throws AuthException { if (!isActive(value)) throw new AuthException("Sign-in cancelled. You can try Continue with ChatGPT again."); }
@@ -273,17 +366,23 @@ public final class HiroshiAuth implements AutoCloseable {
     }
 
     private synchronized JSONObject verifyIdentity(String jwt, String clientId, String nonce) throws Exception {
+        return verifyIdentity(jwt,clientId,nonce,System.currentTimeMillis());
+    }
+    private synchronized JSONObject verifyIdentity(String jwt, String clientId, String nonce,long receivedAt) throws Exception {
         metadata();
         if (cachedJwks == null || System.currentTimeMillis() - jwksAt > 3600000) { cachedJwks = new JSONObject(request(JWKS, "GET", null)); jwksAt = System.currentTimeMillis(); }
-        try { return validateIdToken(jwt, cachedJwks, ISSUER, clientId, nonce, System.currentTimeMillis()); }
+        try { return validateIdToken(jwt, cachedJwks, ISSUER, clientId, nonce, receivedAt); }
         catch (AuthException failure) {
             if (!"KEY_NOT_FOUND".equals(failure.code)) throw failure;
             cachedJwks = new JSONObject(request(JWKS, "GET", null)); jwksAt = System.currentTimeMillis();
-            return validateIdToken(jwt, cachedJwks, ISSUER, clientId, nonce, System.currentTimeMillis());
+            return validateIdToken(jwt, cachedJwks, ISSUER, clientId, nonce, receivedAt);
         }
     }
 
     private static JSONObject tokenRecord(JSONObject tokens, JSONObject claims, String clientId, String host, JSONObject old) throws Exception {
+        return tokenRecord(tokens,claims,clientId,host,old,System.currentTimeMillis());
+    }
+    private static JSONObject tokenRecord(JSONObject tokens, JSONObject claims, String clientId, String host, JSONObject old,long receivedAt) throws Exception {
         JSONObject record = old == null ? new JSONObject() : new JSONObject(old.toString());
         record.put("client_id", clientId).put("host_id", host); record.remove("pending_client_id");
         if (claims != null) record.put("subject", claims.getString("sub")).put("issuer", claims.getString("iss"))
@@ -297,7 +396,7 @@ public final class HiroshiAuth implements AutoCloseable {
         if (tokens.has("id_token")) record.put("id_token", tokens.getString("id_token"));
         if (enabled) {
             record.put("access_token", tokens.getString("access_token")).put("refresh_token", tokens.getString("refresh_token"))
-                    .put("expires_at", System.currentTimeMillis() + tokens.getLong("expires_in") * 1000);
+                    .put("expires_at", receivedAt + tokens.getLong("expires_in") * 1000);
             // This field is opaque when unrecognized; expiry remains the authoritative local bound.
             record.remove("earliest_refresh_at");
             if (tokens.opt("earliest_refresh_at") instanceof Number) record.put("earliest_refresh_at", tokens.getLong("earliest_refresh_at") * 1000);
@@ -384,12 +483,13 @@ public final class HiroshiAuth implements AutoCloseable {
         for (Map.Entry<String, String> value : values.entrySet()) result.add(URLEncoder.encode(value.getKey(), "UTF-8") + "=" + URLEncoder.encode(value.getValue(), "UTF-8"));
         return result.toString();
     }
-    private static JSONObject postForm(String endpoint, Map<String, String> form) throws Exception { return new JSONObject(request(endpoint, "POST", encodeForm(form))); }
+    private JSONObject postForm(String endpoint, Map<String, String> form) throws Exception { return new JSONObject(request(endpoint, "POST", encodeForm(form))); }
     private static boolean sameAuthOrigin(String endpoint) {
         try { URI uri = new URI(endpoint); return "https".equals(uri.getScheme()) && "auth.openai.com".equals(uri.getHost()) && uri.getPort() == -1 && uri.getUserInfo() == null && uri.getFragment() == null && uri.getQuery() == null; }
         catch (Exception ignored) { return false; }
     }
-    private static String request(String endpoint, String method, String body) throws Exception {
+    private String request(String endpoint, String method, String body) throws Exception { return transport.request(endpoint,method,body); }
+    private static String requestHttps(String endpoint, String method, String body) throws Exception {
         if (!sameAuthOrigin(endpoint)) throw new AuthException("The sign-in endpoint could not be verified.");
         HttpsURLConnection connection = (HttpsURLConnection) new URL(endpoint).openConnection();
         connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(15000); connection.setReadTimeout(20000);
@@ -401,22 +501,51 @@ public final class HiroshiAuth implements AutoCloseable {
             if (status < 200 || status >= 300) {
                 String code = ""; try { JSONObject error = new JSONObject(text); code = error.optString("error"); if (error.opt("error") instanceof JSONObject) code = error.getJSONObject("error").optString("code"); } catch (Exception ignored) { }
                 if (!code.matches("[a-z0-9_]{0,100}")) code = "";
-                throw new HttpFailure(status, code);
+                throw new HttpFailure(status,code,connection.getHeaderField("x-request-id"));
             }
             return text;
         } finally { connection.disconnect(); }
     }
     private static String readBounded(InputStream input, int limit) throws IOException { ByteArrayOutputStream output = new ByteArrayOutputStream(); byte[] buffer = new byte[4096]; int count; while ((count = input.read(buffer)) != -1) { if (output.size() + count > limit) throw new IOException("Response too large"); output.write(buffer, 0, count); } return output.toString(StandardCharsets.UTF_8.name()); }
     private static String readLine(InputStream input, int limit) throws IOException { ByteArrayOutputStream output = new ByteArrayOutputStream(); int value; while ((value = input.read()) != -1 && value != '\n') { if (output.size() >= limit) throw new IOException("Request too large"); if (value != '\r') output.write(value); } return output.toString(StandardCharsets.US_ASCII.name()); }
-    private static void respond(Socket socket, String status, String text) throws IOException { byte[] body = ("<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'><title>Hiroshi sensei</title><p>" + text + "</p>").getBytes(StandardCharsets.UTF_8); OutputStream output = socket.getOutputStream(); output.write(("HTTP/1.1 " + status + "\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Security-Policy: default-src 'none'; frame-ancestors 'none'\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\nContent-Length: " + body.length + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII)); output.write(body); output.flush(); }
-    private static String friendly(Exception failure) {
+    private static void respond(Socket socket, String status, String text) throws IOException {
+        // Static local return page. No authorization code, account detail or token is rendered.
+        String html="<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Return to Hiroshi sensei</title>"
+                +"<style>body{margin:0;padding:32px 22px;background:#f6f5f0;color:#305348;font:16px/1.65 system-ui,sans-serif}main{max-width:430px;margin:10vh auto}h1{font-size:27px;line-height:1.2}a{display:block;padding:14px 18px;border-radius:12px;background:#345849;color:white;text-align:center;text-decoration:none;font-weight:600;margin:25px 0}small{color:#71816c}</style>"
+                +"<main><small>HIROSHI SENSEI</small><h1>Return to your teacher</h1><p>"+text+"</p>"
+                +"<a href='intent://signin-complete#Intent;scheme=hiroshi-sensei;package=io.github.erendragneel.hiroshi;end'>Open Hiroshi sensei</a>"
+                +"<small>If the button does not open the app, return to Hiroshi from your recent apps.</small></main></html>";
+        byte[] body=html.getBytes(StandardCharsets.UTF_8);OutputStream output=socket.getOutputStream();
+        output.write(("HTTP/1.1 "+status+"\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\nContent-Length: "+body.length+"\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+        output.write(body);output.flush();
+    }
+    private static boolean knownProviderCode(String code) {
+        return Arrays.asList("invalid_client","invalid_grant","invalid_request","invalid_scope","invalid_target",
+                "unauthorized_client","unsupported_grant_type","access_denied","server_error","temporarily_unavailable",
+                "subscription_sharing_user_not_eligible","chatpass_v2_scope_not_authorized",
+                "chatpass_v2_invalid_authorization_context").contains(code);
+    }
+    private static String safeRequestId(String value) {
+        return value!=null&&(value.matches("req_[A-Za-z0-9_-]{8,100}")||value.matches("[A-Fa-f0-9-]{16,64}"))?value:"";
+    }
+    private boolean isSavingStage() {
+        return "SAVING_SESSION".equals(connectionStage)||"SAVING_CHECKPOINT".equals(connectionStage)||"SAVING_REGISTRATION".equals(connectionStage);
+    }
+    private String friendly(Exception failure) {
         if (failure instanceof AuthException) return failure.getMessage();
         if (failure instanceof HttpFailure) { HttpFailure http = (HttpFailure) failure;
             if ("subscription_sharing_user_not_eligible".equals(http.code)) return "ChatGPT plan usage is unavailable for this account or workspace.";
             if ("invalid_grant".equals(http.code)) return "The ChatGPT sign-in or renewable session expired. Continue with ChatGPT again.";
+            if ("invalid_client".equals(http.code)||"unauthorized_client".equals(http.code)) return "ChatGPT did not accept this app's connection registration. Your saved game is safe. The connection details can identify what needs fixing.";
+            if ("invalid_scope".equals(http.code)||"invalid_target".equals(http.code)) return "ChatGPT did not accept the permissions requested by this connection. Your saved game is safe.";
             if (http.status == 403) return "OpenAI did not allow this connection. Check your account, workspace and regional eligibility.";
             if (http.status == 429) return "ChatGPT is limiting sign-in requests. Wait a little before trying again.";
+            if (http.status>=500) return "The ChatGPT sign-in service could not finish the connection. Tap Continue with ChatGPT to retry.";
+            return "ChatGPT returned to Hiroshi, but the sign-in service did not accept the next connection step. Your game is safe; the connection details can identify the cause.";
         }
-        return "Hiroshi could not complete ChatGPT sign-in. Check your internet connection and try again.";
+        if(isSavingStage())return "Hiroshi could not securely save the connection. Your game progress has not been reset.";
+        if("VERIFYING_IDENTITY".equals(connectionStage))return "Hiroshi could not finish verifying the sign-in. Tap Continue with ChatGPT to retry without repeating browser approval.";
+        if("TOKEN_EXCHANGE".equals(connectionStage))return "ChatGPT returned to Hiroshi, but the connection was interrupted while finishing sign-in. Tap Continue with ChatGPT to try again.";
+        return "The ChatGPT connection could not be started. Your saved game is safe; please try again.";
     }
 }
