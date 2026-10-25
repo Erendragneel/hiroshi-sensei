@@ -1,0 +1,51 @@
+plugins { id 'com.android.application' }
+
+def signingReady = System.getenv('HIROSHI_KEYSTORE') && System.getenv('HIROSHI_STORE_PASSWORD') && System.getenv('HIROSHI_KEY_PASSWORD')
+android {
+    namespace 'io.github.erendragneel.hiroshi'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.github.erendragneel.hiroshi'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.2.0'
+    }
+    signingConfigs {
+        if (signingReady) {
+            upload {
+                storeFile file(System.getenv('HIROSHI_KEYSTORE'))
+                storePassword System.getenv('HIROSHI_STORE_PASSWORD')
+                keyAlias System.getenv('HIROSHI_KEY_ALIAS') ?: 'hiroshi-sensei'
+                keyPassword System.getenv('HIROSHI_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes { release { if (signingReady) signingConfig signingConfigs.upload; minifyEnabled false } }
+    buildFeatures { buildConfig true }
+    sourceSets { main { assets.srcDirs = ['build/hiroshiAssets'] } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    lint { abortOnError true; checkReleaseBuilds true }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.14.0'
+    implementation 'androidx.activity:activity:1.10.1'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
+
+def stageWebAssets = tasks.register('stageWebAssets', Exec) {
+    inputs.files(rootProject.fileTree('../public'))
+    inputs.files(rootProject.fileTree('web'))
+    inputs.file(rootProject.file('scripts/stage-web.mjs'))
+    outputs.dir(layout.buildDirectory.dir('hiroshiAssets'))
+    workingDir rootProject.projectDir
+    commandLine 'node', rootProject.file('scripts/stage-web.mjs').absolutePath
+}
+tasks.named('preBuild').configure { dependsOn stageWebAssets }
+
+tasks.register('requireSigning') {
+    doLast { if (!signingReady) throw new GradleException('Hiroshi release signing is missing. Use scripts/build-release.ps1 or provide HIROSHI_* signing environment variables.') }
+}
+tasks.configureEach { if (name == 'assembleRelease' || name == 'bundleRelease') dependsOn 'requireSigning' }

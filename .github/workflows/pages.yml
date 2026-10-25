@@ -27,6 +27,7 @@ jobs:
       - name: Validate and package the game frontend
         run: |
           node --test tests/*.test.mjs
+          node --test android/scripts/native-bridge.test.mjs
           node --check public/app.js
           node --check public/install.js
           node --check public/sw.js

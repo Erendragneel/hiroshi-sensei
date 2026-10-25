@@ -1,0 +1,10 @@
+#install-app-button,#install-button{display:none}
+.native-account{margin:0 0 20px;padding:16px 18px;border:1px solid #d9e3dc;border-radius:16px;background:#f4f8f3;color:#305348;display:flex;gap:16px;align-items:center;justify-content:space-between}
+.native-account p{font-size:12px;line-height:1.6;margin:5px 0 0;max-width:560px}
+.native-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;flex-shrink:0;max-width:430px}
+.native-actions button{font-size:12px;padding:10px 14px}
+.native-actions a{font-size:12px;color:#305348}
+.native-actions label{font-size:11px;display:grid;gap:4px;max-width:230px}
+.native-actions label[hidden]{display:none}
+.native-actions select{font:inherit;max-width:100%;padding:8px;border-radius:8px;background:white;border:1px solid #b9c9bb;color:#244136}
+@media(max-width:850px){.native-account{display:block}.native-actions{margin-top:12px;max-width:100%}.native-account p{font-size:11px}}
