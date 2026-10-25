@@ -20,3 +20,19 @@
 .mini-avatar img{position:absolute;width:270%;height:auto;max-width:none;left:-95%;top:-35%;object-fit:initial}
 .brand-name{min-width:0;font-size:20px;letter-spacing:-.7px;line-height:1.15}
 .brand-name #brand-name{display:block;font-weight:650}
+
+/* The public game opens protected live chat with a normal top-level link. */
+.has-private-chat .page-header{gap:18px;flex-wrap:wrap;margin-bottom:16px}
+.has-private-chat .header-actions{flex-wrap:wrap;justify-content:flex-end;gap:9px}
+.ai-chat-link{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:12px 15px;border:1px solid var(--green);border-radius:9px;background:var(--green);color:#fbfaf2;font-size:11px;font-weight:650;text-decoration:none;white-space:nowrap}
+.ai-chat-link[hidden]{display:none}
+.ai-chat-link:hover{background:#264638}
+.ai-chat-link svg{width:17px;height:17px}
+.has-private-chat .install-app-button{background:#fcfbf7;color:var(--green);border-color:#d6decc}
+.has-private-chat .install-app-button:hover{background:#edf1e5}
+.ai-chat-note{margin:0 0 24px;padding:13px 16px;border:1px solid #dfe6d5;border-radius:10px;background:#eef2e8;color:#6c7e61;font-size:11px;line-height:1.8}
+.ai-chat-note button{padding:0;color:var(--green);font-size:inherit;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.private-chat-action{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.chat-transfer-steps{padding-left:23px;margin:20px 0;color:#728266;line-height:1.9}
+.chat-transfer-steps li{padding-left:4px;margin-bottom:10px}
+@media(max-width:700px){.has-private-chat .header-actions{justify-content:space-between}.ai-chat-link{flex-basis:100%;min-height:44px;font-size:13px}.ai-chat-note{font-size:12px;line-height:1.8;padding:13px 14px;margin-bottom:20px}.chat-transfer-steps{font-size:13px}}

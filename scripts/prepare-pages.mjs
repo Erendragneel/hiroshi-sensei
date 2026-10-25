@@ -55,6 +55,7 @@ await writeFile(path.join(output, 'app-config.js'), `export const APP_CONFIG = O
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',
   phoneURL: 'https://erendragneel.github.io/hiroshi-sensei/',
+  aiAppURL: 'https://koa-personal-companion.elijio-villa.chatgpt.site/play/',
   apiBase: null
 });
 `);

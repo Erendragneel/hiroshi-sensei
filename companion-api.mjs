@@ -347,6 +347,59 @@ function json(status, body) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
 
+// Only inspect small JSON error codes. Upstream messages can include private
+// request details and must never reach the browser or our own error messages.
+async function readCloudLimitCodes(response) {
+  const limit = 8 * 1024;
+  const cancelBody = async () => { try { await response.body?.cancel(); } catch { /* Ignore a failed error-body cleanup. */ } };
+  if (!/^application\/(?:json|[a-z0-9.+-]+\+json)(?:\s*;|$)/i.test(response.headers.get('content-type') || '')
+    || Number(response.headers.get('content-length')) > limit) {
+    await cancelBody();
+    return {};
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return {};
+  let bytes;
+  try {
+    const chunks = [];
+    let length = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > limit) { await reader.cancel(); return {}; }
+      chunks.push(value);
+    }
+    bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  } catch {
+    try { await reader.cancel(); } catch { /* Keep the original safe fallback. */ }
+    return {};
+  }
+  try {
+    const error = JSON.parse(new TextDecoder().decode(bytes))?.error;
+    const token = value => typeof value === 'string' && /^[a-z0-9_]{1,80}$/i.test(value) ? value.toLowerCase() : '';
+    return { code: token(error?.code), type: token(error?.type) };
+  } catch { return {}; }
+}
+
+async function cloudLimitError(response) {
+  const { code, type } = await readCloudLimitCodes(response);
+  const credits = new Set(['credit_balance_exhausted', 'insufficient_credits']);
+  const billingLimits = new Set(['billing_hard_limit_reached', 'billing_limit_reached', 'spend_limit_reached', 'spend_limit_exceeded', 'usage_limit_reached', 'organization_spend_limit_exceeded', 'project_spend_limit_exceeded', 'organization_usage_limit_exceeded', 'usage_limit_exceeded']);
+  if (credits.has(code) || (!code && credits.has(type))) {
+    return new RequestError(429, 'AI_CREDITS_REQUIRED', 'Add OpenAI API credit in the OpenAI Platform billing settings, then try again.');
+  }
+  if (billingLimits.has(code) || (!code && billingLimits.has(type))) {
+    return new RequestError(429, 'AI_BILLING_LIMIT_REACHED', 'The OpenAI API spending or usage limit has been reached. Review the project or account limit in OpenAI Platform billing settings, then try again.');
+  }
+  if (code !== 'rate_limit_exceeded' && (code === 'insufficient_quota' || type === 'insufficient_quota')) {
+    return new RequestError(429, 'AI_BILLING_UPDATE_REQUIRED', 'OpenAI API billing or quota needs attention. Check the API credit balance and usage limits in OpenAI Platform, then try again.');
+  }
+  return new RequestError(429, 'AI_LIMIT_REACHED', 'Live conversation has reached its current usage limit. Please try again later.');
+}
+
 /** Handles one turn using Web Request/Response APIs, with all secrets confined to the caller. */
 export async function handleChat(request, { apiKey = '', model = 'gpt-5.4-mini', localBaseUrl = '', fetchImpl = globalThis.fetch, timeoutMs } = {}) {
   try {
@@ -382,9 +435,9 @@ export async function handleChat(request, { apiKey = '', model = 'gpt-5.4-mini',
       });
       if (!response.ok) {
         const status = response.status;
+        if (!local && status === 429) throw await cloudLimitError(response);
         await response.body?.cancel();
         if (local) throw new RequestError(503, 'LOCAL_AI_UNAVAILABLE', 'The on-device companion is still starting or could not reply. Please try again in a moment.');
-        if (status === 429) throw new RequestError(429, 'AI_LIMIT_REACHED', 'Live conversation has reached its current usage limit. Please try again later.');
         if (status === 401 || status === 403) throw new RequestError(503, 'AI_CONNECTION_UNAVAILABLE', 'The live conversation connection needs attention.');
         throw new RequestError(502, 'AI_UNAVAILABLE', 'Your companion could not connect right now. Please try again.');
       }

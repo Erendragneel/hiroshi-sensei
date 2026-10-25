@@ -276,6 +276,101 @@ test('upstream failures never expose raw response bodies or credentials', async 
   assert.equal(JSON.parse(body).error.code, 'AI_CONNECTION_UNAVAILABLE');
 });
 
+test('cloud 429 distinguishes exhausted credit, billing limits, and transient rate limits safely', async () => {
+  const cases = [
+    ['credit_balance_exhausted', 'insufficient_quota', 'AI_CREDITS_REQUIRED', /Add OpenAI API credit/],
+    ['insufficient_credits', undefined, 'AI_CREDITS_REQUIRED', /Add OpenAI API credit/],
+    ['billing_hard_limit_reached', 'insufficient_quota', 'AI_BILLING_LIMIT_REACHED', /spending or usage limit/],
+    ['spend_limit_exceeded', undefined, 'AI_BILLING_LIMIT_REACHED', /project or account limit/],
+    ['usage_limit_reached', undefined, 'AI_BILLING_LIMIT_REACHED', /spending or usage limit/],
+    ['organization_spend_limit_exceeded', undefined, 'AI_BILLING_LIMIT_REACHED', /project or account limit/],
+    ['project_spend_limit_exceeded', 'insufficient_quota', 'AI_BILLING_LIMIT_REACHED', /project or account limit/],
+    ['organization_usage_limit_exceeded', undefined, 'AI_BILLING_LIMIT_REACHED', /spending or usage limit/],
+    ['usage_limit_exceeded', undefined, 'AI_BILLING_LIMIT_REACHED', /spending or usage limit/],
+    ['insufficient_quota', undefined, 'AI_BILLING_UPDATE_REQUIRED', /credit balance and usage limits/],
+    [undefined, 'insufficient_quota', 'AI_BILLING_UPDATE_REQUIRED', /billing or quota needs attention/],
+    ['unknown_quota_code', 'insufficient_quota', 'AI_BILLING_UPDATE_REQUIRED', /billing or quota needs attention/],
+    ['rate_limit_exceeded', 'rate_limit_error', 'AI_LIMIT_REACHED', /Please try again later/],
+    ['rate_limit_exceeded', 'insufficient_quota', 'AI_LIMIT_REACHED', /Please try again later/],
+    ['unknown_error', undefined, 'AI_LIMIT_REACHED', /Please try again later/],
+  ];
+  for (const [code, type, expected, message] of cases) {
+    const request = new Request('https://hiroshi.example/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://hiroshi.example' }, body: JSON.stringify(validInput()),
+    });
+    const response = await handleChat(request, {
+      apiKey: FAKE_KEY,
+      fetchImpl: async () => Response.json({ error: { code, type, message: `Private upstream detail ${FAKE_KEY}` } }, { status: 429 }),
+    });
+    assert.equal(response.status, 429);
+    const body = await response.text();
+    const data = JSON.parse(body);
+    assert.equal(data.error.code, expected, `Unexpected classification for ${code}/${type}`);
+    assert.match(data.error.message, message);
+    assert.doesNotMatch(body, /Private upstream detail|test-credential/);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+  }
+});
+
+test('malformed cloud 429 JSON and invalid error fields retain the safe generic limit message', async () => {
+  for (const body of [
+    `{"error":{"code":"credit_balance_exhausted","message":"Private upstream detail ${FAKE_KEY}`,
+    JSON.stringify({ error: { code: { value: 'credit_balance_exhausted' }, type: ['insufficient_quota'], message: FAKE_KEY } }),
+    JSON.stringify({ error: null, message: FAKE_KEY }),
+    JSON.stringify({ error: { code: `credit_balance_exhausted${FAKE_KEY}`, message: FAKE_KEY } }),
+  ]) {
+    const response = await handleChat(new Request('https://hiroshi.example/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(validInput()),
+    }), { apiKey: FAKE_KEY, fetchImpl: async () => new Response(body, { status: 429, headers: { 'Content-Type': 'application/json' } }) });
+    assert.equal(response.status, 429);
+    const result = await response.text();
+    assert.deepEqual(JSON.parse(result), { error: { code: 'AI_LIMIT_REACHED', message: 'Live conversation has reached its current usage limit. Please try again later.' } });
+    assert.doesNotMatch(result, /Private upstream detail|test-credential/);
+  }
+});
+
+test('cloud limit classification cancels non-JSON and oversized bodies without exposing their contents', async () => {
+  for (const kind of ['non-json', 'advertised-oversize', 'streamed-oversize']) {
+    let reads = 0, cancelled = false;
+    const privateBody = JSON.stringify({ error: { code: 'credit_balance_exhausted', message: `Private upstream detail ${FAKE_KEY}` } });
+    const chunks = kind === 'streamed-oversize'
+      ? [new TextEncoder().encode(privateBody + ' '.repeat(8192 - privateBody.length)), new Uint8Array(1), new TextEncoder().encode(FAKE_KEY)]
+      : [new TextEncoder().encode(privateBody)];
+    const stream = new ReadableStream({
+      pull(controller) { reads++; const chunk = chunks.shift(); if (chunk) controller.enqueue(chunk); else controller.close(); },
+      cancel() { cancelled = true; },
+    }, { highWaterMark: 0 });
+    const headers = { 'Content-Type': kind === 'non-json' ? 'text/plain' : 'application/json' };
+    if (kind === 'advertised-oversize') headers['Content-Length'] = '8193';
+    const response = await handleChat(new Request('https://hiroshi.example/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(validInput()),
+    }), { apiKey: FAKE_KEY, fetchImpl: async () => new Response(stream, { status: 429, headers }) });
+    assert.equal(response.status, 429);
+    const body = await response.text();
+    assert.equal(JSON.parse(body).error.code, 'AI_LIMIT_REACHED', kind);
+    assert.doesNotMatch(body, /Private upstream detail|test-credential/);
+    assert.equal(cancelled, true, `${kind} must cancel its unread body`);
+    assert.equal(reads, kind === 'streamed-oversize' ? 2 : 0, `${kind} must not read beyond the error-body limit`);
+  }
+});
+
+test('local 429 responses remain local availability errors and are not parsed as cloud billing errors', async () => {
+  let read = false, cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) { read = true; controller.enqueue(new TextEncoder().encode(JSON.stringify({ error: { code: 'credit_balance_exhausted', message: FAKE_KEY } }))); },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  const response = await handleChat(new Request('https://hiroshi.example/api/chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(validInput()),
+  }), { apiKey: FAKE_KEY, localBaseUrl: 'http://127.0.0.1:4318', fetchImpl: async () => new Response(stream, { status: 429, headers: { 'Content-Type': 'application/json' } }) });
+  assert.equal(response.status, 503);
+  const body = await response.text();
+  assert.equal(JSON.parse(body).error.code, 'LOCAL_AI_UNAVAILABLE');
+  assert.doesNotMatch(body, /test-credential|credit_balance_exhausted/);
+  assert.equal(cancelled, true);
+  assert.equal(read, false);
+});
+
 test('pure Web API core handles timeouts and malformed model responses safely', async () => {
   const request = () => new Request('https://amiko.example/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://amiko.example' }, body: JSON.stringify(validInput()) });
   const timedOut = await handleChat(request(), { apiKey: FAKE_KEY, fetchImpl: async () => { throw new DOMException('Sensitive detail', 'TimeoutError'); } });
