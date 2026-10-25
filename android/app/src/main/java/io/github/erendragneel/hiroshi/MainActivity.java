@@ -3,6 +3,8 @@ package io.github.erendragneel.hiroshi;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
@@ -14,6 +16,10 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Button;
+import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -21,6 +27,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
@@ -29,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 /** Only the packaged, origin-restricted UI receives this native bridge. */
 public final class MainActivity extends ComponentActivity {
@@ -40,7 +48,7 @@ public final class MainActivity extends ComponentActivity {
     private final ConcurrentHashMap<String, String> active = new ConcurrentHashMap<>();
     private ValueCallback<Uri[]> fileCallback;
     private byte[] pendingBackup;
-    private boolean closed;
+    private volatile boolean closed;
     private final ActivityResultLauncher<Intent> openDocument = registerForActivityResult(
         new ActivityResultContracts.StartActivityForResult(), result -> {
             if (fileCallback == null) return;
@@ -51,7 +59,7 @@ public final class MainActivity extends ComponentActivity {
         new ActivityResultContracts.CreateDocument("application/json"), uri -> {
             byte[] data = pendingBackup; pendingBackup = null;
             if (uri == null || data == null) return;
-            requests.execute(() -> {
+            background(() -> {
                 try (OutputStream stream = getContentResolver().openOutputStream(uri)) {
                     if (stream == null) throw new java.io.IOException();
                     stream.write(data);
@@ -62,17 +70,27 @@ public final class MainActivity extends ComponentActivity {
     @SuppressLint("SetJavaScriptEnabled") // Packaged files only, no remote frames or scripts.
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        try { initializeGame(); }
+        catch (RuntimeException | LinkageError failure) { showStartupFailure(failure); }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private void initializeGame() {
         auth = new HiroshiAuth(getApplicationContext());
         inference = new HiroshiInference(() -> auth.accessToken());
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         FrameLayout root = new FrameLayout(this);
-        WindowCompat.getInsetsController(getWindow(),root).setAppearanceLightStatusBars(true);
-        WindowCompat.getInsetsController(getWindow(),root).setAppearanceLightNavigationBars(true);
+        web = new WebView(this); root.addView(web); setContentView(root);
+        // API 35+ no longer creates window decor inside setDecorFitsSystemWindows.
+        // Attach content before asking PhoneWindow for its insets controller.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(true);
+        bars.setAppearanceLightNavigationBars(true);
         ViewCompat.setOnApplyWindowInsetsListener(root,(view,insets)->{
             androidx.core.graphics.Insets p=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout()|WindowInsetsCompat.Type.ime());
             view.setPadding(p.left,p.top,p.right,p.bottom);return WindowInsetsCompat.CONSUMED;
         });
-        web = new WebView(this); root.addView(web); setContentView(root);
+        ViewCompat.requestApplyInsets(root);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true);
         settings.setAllowFileAccess(false); settings.setAllowContentAccess(false);
@@ -114,7 +132,33 @@ public final class MainActivity extends ComponentActivity {
             if(web!=null)web.evaluateJavascript("(()=>{const d=document.querySelector('dialog[open]');if(d){d.close();return true;}return false;})()",value->{if(!"true".equals(value))finish();});else finish();
         }});
         web.loadUrl("https://"+ORIGIN+"/index.html");
-        requests.execute(()->{try{if(auth.status().optBoolean("planEnabled")){inference.listModels();connectionChanged();}}catch(Exception ignored){connectionChanged();}});
+        background(()->{try{if(auth.status().optBoolean("planEnabled")){inference.listModels();connectionChanged();}}catch(Exception ignored){connectionChanged();}});
+    }
+
+    private void background(Runnable work) {
+        if(closed)return;
+        try { requests.execute(work); }
+        catch(RejectedExecutionException ignored) { /* The Activity closed before this queued callback. */ }
+    }
+
+    /** A local, message-free diagnostic report; nothing is uploaded automatically. */
+    void showStartupFailure(Throwable failure) {
+        if(inference!=null)inference.cancel();
+        if(web!=null){web.removeJavascriptInterface("HiroshiAndroid");web.destroy();web=null;}
+        String report=StartupDiagnostics.describe(failure,BuildConfig.VERSION_NAME,android.os.Build.VERSION.SDK_INT);
+        LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
+        int padding=(int)(24*getResources().getDisplayMetrics().density);
+        panel.setPadding(padding,padding*2,padding,padding);panel.setBackgroundColor(0xFFF6F5F0);
+        TextView title=new TextView(this);title.setText("Hiroshi could not open");title.setTextSize(23);title.setTextColor(0xFF305348);
+        TextView explanation=new TextView(this);explanation.setText("Your saved game has not been reset. Copy the error details below to report this startup problem.");explanation.setTextSize(16);explanation.setPadding(0,padding,0,padding);
+        TextView details=new TextView(this);details.setText(report);details.setTextSize(12);details.setTextIsSelectable(true);
+        Button copy=new Button(this);copy.setText("Copy error details");copy.setOnClickListener(view->{
+            ClipboardManager clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+            if(clipboard!=null){clipboard.setPrimaryClip(ClipData.newPlainText("Hiroshi startup report",report));Toast.makeText(this,"Error details copied",Toast.LENGTH_SHORT).show();}
+        });
+        Button close=new Button(this);close.setText("Close");close.setOnClickListener(view->finish());
+        panel.addView(title);panel.addView(explanation);panel.addView(copy);panel.addView(close);panel.addView(details);
+        setContentView(panel);
     }
 
     private JSONObject status() throws Exception {
@@ -141,13 +185,14 @@ public final class MainActivity extends ComponentActivity {
             active.put(id,action);
             if("connect".equals(action)){
                 runOnUiThread(()->auth.signIn(MainActivity.this,(safe,error)->{
+                    if(closed)return;
                     if(error!=null){MainActivity.this.error(id,401,"SIGN_IN_REQUIRED",error);return;}
-                    requests.execute(()->{try{inference.clearModels();if(safe.optBoolean("planEnabled"))inference.listModels();reply(id,200,status());}
+                    background(()->{try{inference.clearModels();if(safe.optBoolean("planEnabled"))inference.listModels();reply(id,200,status());}
                         catch(HiroshiInference.InferenceException e){MainActivity.this.error(id,e.status,e.code,e.getMessage());}
                         catch(Exception e){MainActivity.this.error(id,503,"CONNECTION_UNAVAILABLE","Sign-in finished, but model access could not be checked. Please reconnect or check your ChatGPT usage.");}connectionChanged();});
                 }));return;
             }
-            requests.execute(()->{
+            background(()->{
                 try {
                     JSONObject payload=new JSONObject(raw);
                     switch(action){
@@ -172,7 +217,7 @@ public final class MainActivity extends ComponentActivity {
         }
     }
     @Override protected void onDestroy(){
-        closed=true;inference.cancel();auth.close();requests.shutdownNow();
+        closed=true;if(inference!=null)inference.cancel();if(auth!=null)auth.close();requests.shutdownNow();
         if(fileCallback!=null)fileCallback.onReceiveValue(null);
         if(web!=null){web.removeJavascriptInterface("HiroshiAndroid");web.destroy();web=null;}
         super.onDestroy();

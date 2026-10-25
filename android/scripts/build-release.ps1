@@ -5,13 +5,22 @@ if (-not $releaseVersion -or $releaseVersion -notmatch '^\d+\.\d+\.\d+$') { thro
 $releaseApk = Join-Path 'artifacts' "hiroshi-sensei-$releaseVersion.apk"
 $releaseBundle = Join-Path 'artifacts' "hiroshi-sensei-$releaseVersion.aab"
 $toolRoot = Join-Path $env:LOCALAPPDATA 'LanguageMinerBuildTools'
-$environmentNames = @('JAVA_HOME', 'ANDROID_HOME', 'JAVA_TOOL_OPTIONS', 'HIROSHI_KEYSTORE', 'HIROSHI_STORE_PASSWORD', 'HIROSHI_KEY_PASSWORD', 'HIROSHI_KEY_ALIAS')
+$environmentNames = @('JAVA_HOME', 'ANDROID_HOME', 'JAVA_TOOL_OPTIONS', 'HIROSHI_TEST_MAVEN_REPO', 'HIROSHI_KEYSTORE', 'HIROSHI_STORE_PASSWORD', 'HIROSHI_KEY_PASSWORD', 'HIROSHI_KEY_ALIAS')
 $previousEnvironment = @{}
 foreach ($name in $environmentNames) { $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 try {
     if (-not $env:JAVA_HOME) { $env:JAVA_HOME = (Get-ChildItem -LiteralPath (Join-Path $toolRoot 'java') -Directory | Select-Object -First 1).FullName }
     if (-not $env:ANDROID_HOME) { $env:ANDROID_HOME = Join-Path $toolRoot 'android-sdk' }
     if (-not $env:JAVA_TOOL_OPTIONS) { $env:JAVA_TOOL_OPTIONS = '-Djdk.net.unixdomain.tmpdir=C:/HiroshiSensei-Unavailable-Unix-Sockets' }
+    if (-not $env:HIROSHI_TEST_MAVEN_REPO) {
+        # Robolectric's Windows native loader needs a path without URL-encoded spaces.
+        $mavenCache = Join-Path $env:USERPROFILE '.m2/repository'
+        New-Item -ItemType Directory -Force -Path $mavenCache | Out-Null
+        $fileSystem = New-Object -ComObject Scripting.FileSystemObject
+        try { $env:HIROSHI_TEST_MAVEN_REPO = $fileSystem.GetFolder($mavenCache).ShortPath }
+        finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($fileSystem) }
+        if ($env:HIROSHI_TEST_MAVEN_REPO -match ' ') { throw 'Set HIROSHI_TEST_MAVEN_REPO to a Maven cache path without spaces for Android startup tests.' }
+    }
     if (-not $env:HIROSHI_KEYSTORE) {
         & "$PSScriptRoot/create-upload-key.ps1"
         $keyRoot = Join-Path $env:LOCALAPPDATA 'HiroshiSenseiSigning'

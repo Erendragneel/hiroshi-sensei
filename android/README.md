@@ -2,6 +2,10 @@
 
 This separate Android app bundles the game and connects directly to OpenAI through the documented **Sign in with ChatGPT / ChatGPT plan usage** flow. It does not use the desktop's local model, a PC relay, or the separately billed API key.
 
+## Startup fix in 0.2.2
+
+Version 0.2.2 fixes the API 35+ launch crash caused by requesting a window insets controller before creating the window decor. The original 0.2.1 failure was reproduced against Android 16 framework code, and regression tests now check cold launch, Activity recreation, native bridge assets, restricted WebView settings, and local failure recovery. Startup failures display message-free diagnostics that the user can copy; reports are never uploaded automatically. The update uses the same package and signing key, so installation over the existing app retains its data. GitHub Actions now runs the native startup suite on code changes.
+
 ## Current verification boundary
 
 This is an Android preview. OpenAI documents the local open-source sign-in flow, but does not provide an Android-specific guarantee. A successful build and automated checks do **not** establish that this account can authorize ChatGPT plan usage or complete inference on a phone. Those steps require installation, consent in the phone's system browser, and a completed conversation. Do not describe it as verified phone AI until those checks succeed.
@@ -22,7 +26,7 @@ Progress, chats, and notebook notes stay in the app's local WebView storage. Rec
 
 ## Build
 
-Use JDK 17+ and Android SDK 36. The pinned Gradle wrapper builds the app. `scripts/stage-web.mjs` bundles the root `public/` game and adds the native connection UI without altering the deployed web app.
+Use JDK 21+ and Android SDK 36. The Android 16 framework startup tests require Java 21. The pinned Gradle wrapper builds the app. `scripts/stage-web.mjs` bundles the root `public/` game and adds the native connection UI without altering the deployed web app.
 
 ```powershell
 node --test android/scripts/native-bridge.test.mjs
