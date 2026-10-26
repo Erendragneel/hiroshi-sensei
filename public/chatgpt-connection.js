@@ -30,7 +30,7 @@ export function createChatGPTConnection({backend, phoneURL = PHONE_URL, native =
   const enabled = !native && Boolean(backendURL);
   const api = enabled ? `${backendURL}/api/hiroshi` : null;
   let session = null, operation = false, gameBusy = false, checking = null, newApproval = false;
-  let state = {configured:false, stage:'disconnected', model:'', message:'Connect your ChatGPT plan once to use Hiroshi on this phone.', busy:false};
+  let state = {configured:false, stage:'disconnected', model:'', message:'In-game AI uses your shared Codex / ChatGPT Work allowance.', busy:false};
   const snapshot = () => ({...state, provider:state.configured ? 'chatgpt' : 'none', busy:operation || gameBusy});
   function publish(next) {
     const wasConnected = state.configured;
@@ -96,7 +96,7 @@ export function createChatGPTConnection({backend, phoneURL = PHONE_URL, native =
   async function refreshNow() {
     if(!enabled) return snapshot();
     if(checking) return checking;
-    if(!session) { publish({configured:false, stage:'disconnected', model:'', message:'Connect your ChatGPT plan once to use Hiroshi on this phone.'}); return snapshot(); }
+    if(!session) { publish({configured:false, stage:'disconnected', model:'', message:'In-game AI uses your shared Codex / ChatGPT Work allowance.'}); return snapshot(); }
     checking = (async () => {
       publish({stage:'checking', message:'Reconnecting Hiroshi…'});
       try {
@@ -104,7 +104,7 @@ export function createChatGPTConnection({backend, phoneURL = PHONE_URL, native =
         if(response.status === 401) return snapshot();
         if(!response.ok) throw new Error(await safeError(response, 'Hiroshi could not check the saved connection. Try again.'));
         const result = await response.json();
-        if(result.configured === true && result.provider === 'chatgpt') publish({configured:true, stage:'connected', model:typeof result.model === 'string' ? result.model.slice(0,100) : '', message:'Your ChatGPT plan is connected. Your PC can stay off; your plan’s limits apply.'});
+        if(result.configured === true && result.provider === 'chatgpt') publish({configured:true, stage:'connected', model:typeof result.model === 'string' ? result.model.slice(0,100) : '', message:'This in-game connection uses your shared Codex / ChatGPT Work allowance. Your PC can stay off.'});
         else publish({configured:false, stage:'attention', model:'', message:'The hosted ChatGPT connection needs attention. Your saved game is safe.'});
       } catch {
         // Keep the approved device session through offline/service failures.

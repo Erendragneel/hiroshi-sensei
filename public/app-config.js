@@ -1,6 +1,6 @@
 // Public deployment settings only. Credentials belong on the server.
 // The Pages packager replaces this file in its output for static hosting.
-import { ANDROID_RELEASE } from './android-release.js?v=20261026-phone-chatgpt';
+import { ANDROID_RELEASE } from './android-release.js?v=20261026-visual-classroom';
 export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',

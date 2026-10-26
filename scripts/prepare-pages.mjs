@@ -1,6 +1,7 @@
 import { copyFile, lstat, mkdir, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { HIROSHI_WIDGET_HTML } from '../chatgpt-tutor/widget.mjs';
 
 const workspace = await realpath(fileURLToPath(new URL('../', import.meta.url)));
 const source = path.join(workspace, 'public');
@@ -51,7 +52,8 @@ for (const relativePath of files) {
   await copyFile(path.join(source, relativePath), destination);
 }
 await writeFile(path.join(output, '.nojekyll'), '');
-await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-phone-chatgpt';
+await writeFile(path.join(output, 'classroom-preview.html'), HIROSHI_WIDGET_HTML);
+await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-visual-classroom';
 export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',
@@ -62,5 +64,5 @@ export const APP_CONFIG = Object.freeze({
   apiBase: 'https://koa-personal-companion.elijio-villa.chatgpt.site/api/hiroshi'
 });
 `);
-const fileCount = new Set([...files, '.nojekyll', 'app-config.js']).size;
+const fileCount = new Set([...files, '.nojekyll', 'app-config.js', 'classroom-preview.html']).size;
 console.log(`GitHub Pages package: ${output}\nFiles: ${fileCount}`);
