@@ -20,16 +20,16 @@ const correct = exercises => Object.fromEntries(exercises.map(exercise => [exerc
 const today = new Date().toISOString();
 function harness(initial = createTeacherState(), {live = false, accepted = true, extras = false, onNavigate} = {}) {
   let state = sanitizeTeacherState(initial), writes = 0;
-  const modals = [], asks = [], toasts = [], opened = [];
+  const modals = [], asks = [], toasts = [], opened = [], spoken = [];
   const context = vm.createContext({document: {createElement: tag => new Element(tag)}, structuredClone, Intl, Date, LESSONS, createAssignment, recordLessonPractice, submitAssignment});
   vm.runInContext(source, context, {filename: 'public/teacher-ui.js'});
   const ui = context.createTeacherUI({getCompanionName: () => 'Hiroshi sensei', getState: () => state, setState: next => {writes++; state = sanitizeTeacherState(next);},
-    openModal: (title, subtitle) => {const content = new Element('section'); modals.push({title, subtitle, content}); return content;}, toast: message => toasts.push(message), speak() {}, canAsk: () => live,
+    openModal: (title, subtitle) => {const content = new Element('section'); modals.push({title, subtitle, content}); return content;}, toast: message => toasts.push(message), speak: (...args) => spoken.push(args), canAsk: () => live,
     onAsk: (lessonContext, question) => {asks.push({lessonContext, question}); return accepted;},
     ...(onNavigate ? {onNavigate} : {}),
     ...(extras ? {onOpenScenes: () => opened.push('scenes'), onOpenPhrases: () => opened.push('phrases'), onOpenNotebook: () => opened.push('notebook')} : {}),
   });
-  return {ui, modals, asks, toasts, opened, get state() {return state;}, get writes() {return writes;}, get current() {return modals.at(-1);}};
+  return {ui, modals, asks, toasts, opened, spoken, get state() {return state;}, get writes() {return writes;}, get current() {return modals.at(-1);}};
 }
 function presence(modal) {
   const strip = modal.content.children[0];
@@ -40,12 +40,14 @@ function presence(modal) {
   assert.match(text(strip), /Hiroshi sensei.*Your Japanese tutor/);
 }
 
-test('Assignments is a direct list, has a useful empty state, and keeps Hiroshi present on every teaching screen', () => {
+test('the all-assignments list has a useful empty state and keeps Hiroshi present on every teaching screen', () => {
   const h = harness();
-  h.ui.showAssignments(); assert.equal(h.current.title, 'Your assignments'); presence(h.current);
-  assert.match(text(h.current.content), /Your first assignment is waiting/);
+  h.ui.showHomework(); assert.equal(h.current.title, 'Your assignments'); presence(h.current);
+  assert.match(text(h.current.content), /Start your first assignment/);
   assert.equal(h.writes, 0); assert.equal(h.asks.length, 0);
-  descendants(h.current.content).find(item => item.textContent === 'Find a lesson →').click();
+  descendants(h.current.content).find(item => item.textContent === 'Open my first assignment →').click();
+  assert.equal(h.current.title, LESSONS[0].title); presence(h.current);
+  h.ui.show();
   presence(h.current); assert.equal(h.current.title, 'Learn with Hiroshi sensei');
   h.ui.showLesson(LESSONS[0].id); presence(h.current);
   h.ui.showProgress(); presence(h.current);
@@ -56,7 +58,7 @@ test('assignment cards group current work and reviewed work, open the saved draf
   const active = practiced.assignments[0]; active.answers[LESSONS[0].homework[0].id] = 'Hajimemashite';
   const reviewed = createAssignment(LESSONS[1].id, today); practiced.assignments.push(reviewed);
   const initial = submitAssignment(practiced, reviewed.id, correct(LESSONS[1].homework), today).state;
-  const h = harness(initial); h.ui.showAssignments();
+  const h = harness(initial); h.ui.showHomework();
   assert.match(text(h.current.content), /To work on · 1/); assert.match(text(h.current.content), /Reviewed assignments · 1/);
   assert.match(text(h.current.content), /1\/4 answers saved/); assert.match(text(h.current.content), /Last submitted review: 4\/4 target phrases/);
   const cards = descendants(h.current.content).filter(item => item.className === 'teacher-assignment-card');
@@ -128,4 +130,89 @@ test('every authored lesson has a visual phrase board grounded in its existing e
       assert.ok(descendants(part).find(item => item.className === 'concept-meaning').textContent);
     }
   }
+});
+
+test('the first Assignments action creates four real questions with lesson help, then resumes the same draft and due date', () => {
+  const h = harness(createTeacherState(), {live: true});
+  assert.equal(h.state.assignments.length, 0);
+  h.ui.showAssignments();
+  assert.equal(h.current.title, LESSONS[0].title); presence(h.current);
+  assert.equal(h.state.assignments.length, 1);
+  const assignment = h.state.assignments[0], originalId = assignment.id, originalDue = assignment.dueAt;
+  assert.equal(assignment.lessonId, LESSONS[0].id);
+  assert.equal(Date.parse(assignment.dueAt) - Date.parse(assignment.assignedAt), 86400000);
+  const nodes = descendants(h.current.content);
+  assert.equal(nodes.filter(item => item.tagName === 'fieldset').length, 4);
+  for (const exercise of LESSONS[0].homework) assert.ok(nodes.some(item => item.tagName === 'legend' && item.textContent.endsWith(exercise.prompt)));
+  const brief = nodes.find(item => item.className === 'assignment-brief'), notes = nodes.find(item => item.className === 'assignment-lesson-help'), form = nodes.find(item => item.tagName === 'form');
+  assert.match(text(brief), /Your task/); assert.match(text(brief), /4 short exercises/);
+  assert.ok(h.current.content.children.indexOf(brief) < h.current.content.children.indexOf(form));
+  assert.ok(h.current.content.children.indexOf(notes) < h.current.content.children.indexOf(form));
+  assert.ok(text(notes).includes(LESSONS[0].examples[0].target));
+  assert.ok(text(notes).includes(LESSONS[0].examples[0].meaning));
+  descendants(notes).find(item => item.textContent === 'Listen').click();
+  assert.equal(h.spoken[0][0], LESSONS[0].examples[0].target); assert.equal(h.spoken[0][1], 'ja');
+  const input = nodes.find(item => item.tagName === 'textarea'); input.value = 'My introduction draft'; input.dispatch('input');
+  const beforeResume = structuredClone(h.state), writes = h.writes;
+  h.ui.showAssignments(); h.ui.showAssignments();
+  assert.equal(h.writes, writes); assert.equal(h.state.assignments.length, 1);
+  assert.equal(h.state.assignments[0].id, originalId); assert.equal(h.state.assignments[0].dueAt, originalDue);
+  assert.equal(descendants(h.current.content).find(item => item.tagName === 'textarea').value, 'My introduction draft');
+  assert.deepEqual(h.state, beforeResume);
+  assert.equal(h.state.assignments[0].attempts.length, 0); assert.equal(h.state.assignments[0].latestScore, null);
+  assert.equal(h.state.assignments[0].submittedAt, null); assert.deepEqual(h.state.lessons, {});
+  assert.equal(h.asks.length, 0);
+  descendants(h.current.content).find(item => item.textContent === 'Review the full lesson →').click();
+  assert.equal(h.current.title, LESSONS[0].title); assert.match(h.current.subtitle, /YOUR LESSON/);
+  assert.equal(h.state.assignments[0].id, originalId); assert.equal(h.asks.length, 0);
+});
+
+test('a completed assignment offers explicit progression to the first unassigned lesson without altering earlier work', () => {
+  const initial = createTeacherState(), first = createAssignment(LESSONS[0].id, today); initial.assignments.push(first);
+  const reviewed = submitAssignment(initial, first.id, correct(LESSONS[0].homework), today).state;
+  const h = harness(reviewed, {live: true}), original = structuredClone(h.state.assignments[0]);
+  h.ui.showAssignments();
+  assert.equal(h.current.title, 'Your assignments'); assert.equal(h.state.assignments.length, 1); assert.equal(h.writes, 0);
+  const next = descendants(h.current.content).find(item => item.textContent === 'Get my next assignment →');
+  assert.ok(next); next.click();
+  assert.equal(h.current.title, LESSONS[1].title); assert.equal(h.state.assignments.length, 2);
+  assert.equal(h.state.assignments[1].lessonId, LESSONS[1].id);
+  assert.deepEqual(h.state.assignments[0], original);
+  const id = h.state.assignments[1].id, dueAt = h.state.assignments[1].dueAt, writes = h.writes;
+  next.click(); h.ui.showAssignments();
+  assert.equal(h.state.assignments.length, 2); assert.equal(h.state.assignments[1].id, id); assert.equal(h.state.assignments[1].dueAt, dueAt);
+  assert.equal(h.writes, writes); assert.deepEqual(h.state.lessons, {}); assert.equal(h.asks.length, 0);
+});
+
+test('unsubmitted revisions remain pending even after a perfect review and a stale next-assignment button cannot skip them', () => {
+  const initial = createTeacherState(), first = createAssignment(LESSONS[0].id, today); initial.assignments.push(first);
+  const reviewed = submitAssignment(initial, first.id, correct(LESSONS[0].homework), today).state;
+  const h = harness(reviewed, {live: true}); h.ui.showAssignments();
+  const oldNextButton = descendants(h.current.content).find(item => item.textContent === 'Get my next assignment →');
+  const originalReview = structuredClone(h.state.assignments[0].attempts[0]);
+  h.ui.showAssignment(first.id);
+  const input = descendants(h.current.content).find(item => item.tagName === 'textarea'); input.value = 'An unsubmitted revision'; input.dispatch('input');
+  oldNextButton.click();
+  assert.equal(h.current.title, LESSONS[0].title); assert.match(text(h.current.content), /Unsubmitted revision/);
+  assert.equal(h.state.assignments.length, 1); assert.equal(h.state.assignments[0].id, first.id);
+  assert.equal(h.state.assignments[0].firstScore, 4); assert.equal(h.state.assignments[0].latestScore, 4);
+  assert.deepEqual(h.state.assignments[0].attempts, [originalReview]);
+  h.ui.showAssignments(); assert.equal(h.current.title, LESSONS[0].title);
+  assert.equal(h.state.assignments.length, 1); assert.equal(h.asks.length, 0);
+});
+
+test('all six reviewed assignments offer review without creating duplicates or claiming lesson-practice completion', () => {
+  let initial = createTeacherState();
+  for (const lesson of LESSONS) {
+    const assignment = createAssignment(lesson.id, today); initial.assignments.push(assignment);
+    initial = submitAssignment(initial, assignment.id, correct(lesson.homework), today).state;
+  }
+  const h = harness(initial, {live: true}), original = structuredClone(h.state);
+  h.ui.showAssignments(); h.ui.showAssignments();
+  assert.equal(h.current.title, 'Your assignments'); assert.match(text(h.current.content), /You have finished this set of assignments/);
+  assert.ok(!descendants(h.current.content).some(item => item.textContent === 'Get my next assignment →'));
+  assert.equal(descendants(h.current.content).filter(item => item.className === 'teacher-assignment-card').length, 6);
+  descendants(h.current.content).find(item => item.textContent === 'Review my lessons →').click();
+  assert.equal(h.current.title, 'Learn with Hiroshi sensei');
+  assert.deepEqual(h.state, original); assert.equal(h.writes, 0); assert.deepEqual(h.state.lessons, {}); assert.equal(h.asks.length, 0);
 });

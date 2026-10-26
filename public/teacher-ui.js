@@ -112,7 +112,7 @@ export function createTeacherUI({ getCompanionName = () => 'Hiroshi sensei', get
   function navigation(content, tab) {
     const row = el('nav', 'teacher-tabs');
     row.setAttribute('aria-label', 'Teacher mode');
-    for (const [label, key, handler] of [['Lessons', 'lessons', show], ['Assignments', 'homework', showHomework], ['Progress', 'progress', showProgress]]) {
+    for (const [label, key, handler] of [['Lessons', 'lessons', show], ['Assignments', 'homework', openAssignments], ['Progress', 'progress', showProgress]]) {
       const b = action(label, `teacher-tab${key === tab ? ' selected' : ''}`, handler);
       if (key === tab) b.setAttribute('aria-current', 'page');
       row.append(b);
@@ -300,6 +300,24 @@ export function createTeacherUI({ getCompanionName = () => 'Hiroshi sensei', get
     summary.append(el('h3', '', `${label}: ${report.score}/${report.total}`), el('p', '', report.score === report.total ? 'You used all the target phrases. Revisit the lesson whenever you want a refresher.' : 'A few phrases need another try. Read the explanations, revise your answers, and submit again.'));
     return summary;
   }
+  function openAssignments() {
+    const state = getState();
+    const pending = state.assignments.filter(item => lessonById(item.lessonId) && !isDone(item))
+      .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))[0];
+    if (pending) return showAssignment(pending.id);
+    if (!state.assignments.length) return assignNextLesson();
+    return showHomework();
+  }
+  function assignNextLesson() {
+    const state = getState();
+    const pending = state.assignments.find(item => lessonById(item.lessonId) && !isDone(item));
+    if (pending) return showAssignment(pending.id);
+    const lesson = LESSONS.find(item => !state.assignments.some(assignment => assignment.lessonId === item.id));
+    if (!lesson) return showHomework();
+    const assignment = createAssignment(lesson.id, new Date().toISOString());
+    change(next => { next.activeLessonId = lesson.id; next.assignments.push(assignment); });
+    showAssignment(assignment.id);
+  }
   function showHomework() {
     const content = open('Your assignments', 'TASKS · DRAFTS · FEEDBACK', 'Your assigned work, saved drafts, and feedback are all here.');
     onNavigate('assignments');
@@ -308,7 +326,7 @@ export function createTeacherUI({ getCompanionName = () => 'Hiroshi sensei', get
     const assignments = getState().assignments.filter(item => lessonById(item.lessonId));
     if (!assignments.length) {
       const empty = el('div', 'teacher-empty');
-      empty.append(el('span', '', '✎'), el('h3', '', 'Your first assignment is waiting'), el('p', '', `Choose a lesson, learn the phrases, then let ${getCompanionName()} give you a little homework.`), action('Find a lesson →', 'primary-button', show));
+      empty.append(el('span', '', '✎'), el('h3', '', 'Start your first assignment'), el('p', '', 'Four short introduction exercises, with the lesson notes beside your work.'), action('Open my first assignment →', 'primary-button', assignNextLesson));
       content.append(empty);
     }
     const pending = assignments.filter(item => !isDone(item)).sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
@@ -329,7 +347,15 @@ export function createTeacherUI({ getCompanionName = () => 'Hiroshi sensei', get
       }
       content.append(section);
     }
-    if (assignments.length) content.append(el('p', 'teacher-footnote', 'Open an assignment to continue its saved draft, submit your work, or read earlier feedback. Scores check the phrases taught in that lesson.'));
+    if (assignments.length && !pending.length) {
+      const nextLesson = LESSONS.find(lesson => !assignments.some(item => item.lessonId === lesson.id));
+      const next = el('section', 'assignment-next');
+      next.append(el('h3', '', nextLesson ? 'Ready for your next assignment?' : 'You have finished this set of assignments'));
+      next.append(el('p', '', nextLesson ? `${nextLesson.title}: ${nextLesson.objective}` : 'Revisit a lesson, review your feedback, or practise these phrases with Hiroshi.'));
+      next.append(action(nextLesson ? 'Get my next assignment →' : 'Review my lessons →', 'primary-button', nextLesson ? assignNextLesson : show));
+      content.append(next);
+    }
+    if (assignments.length) content.append(el('p', 'teacher-footnote', 'Open an assignment to continue its saved draft, submit your work, or read earlier feedback. These are exercises from your Japanese course; feedback checks the taught phrases.'));
   }
   function showAssignment(id, review = true) {
     const assignment = getState().assignments.find(item => item.id === id);
@@ -341,7 +367,26 @@ export function createTeacherUI({ getCompanionName = () => 'Hiroshi sensei', get
     top.append(action('← All assignments', 'teacher-link', showHomework), el('span', 'teacher-duration', dueText(assignment)));
     const draftStatus = el('p', 'teacher-draft-status', assignmentDraftText(assignment));
     draftStatus.setAttribute('role', 'status');
-    content.append(top, draftStatus, el('p', 'modal-intro', lesson.objective));
+    content.append(top, draftStatus);
+    const brief = el('section', 'assignment-brief');
+    brief.append(el('h3', '', 'Your task'), el('p', '', lesson.objective), el('p', '', `${lesson.homework.length} short exercises · Japanese or the taught romanization`));
+    const steps = el('ol', 'assignment-steps');
+    for (const instruction of ['Read or listen to the lesson examples.', 'Write your answers below. Your draft saves as you type.', 'Submit, read the feedback, and revise anything you want to practise.']) steps.append(el('li', '', instruction));
+    brief.append(steps, action('Review the full lesson →', 'teacher-link', () => showLesson(lesson.id)));
+    content.append(brief);
+    const notes = el('details', 'assignment-lesson-help');
+    notes.append(el('summary', '', 'Lesson notes and examples — open whenever you need help'));
+    for (const explanation of lesson.explanation.slice(0, 3)) notes.append(el('p', '', explanation));
+    const visual = conceptBoard(lesson); if (visual) notes.append(visual);
+    for (const example of lesson.examples) {
+      const row = el('div', 'lesson-example'), copy = el('div');
+      const target = el('p', 'example-target', example.target); target.lang = 'ja';
+      copy.append(target, el('p', 'example-reading', example.reading), el('p', 'example-meaning', example.meaning));
+      const listen = action('Listen', 'teacher-link', () => speak(example.target, 'ja', listen));
+      listen.setAttribute('aria-label', `Listen to assignment example: ${example.target}`);
+      row.append(copy, listen); notes.append(row);
+    }
+    content.append(notes);
     const prior = latest(assignment);
     if (prior) {
       const history = el('div', 'teacher-attempts');
@@ -435,5 +480,5 @@ export function createTeacherUI({ getCompanionName = () => 'Hiroshi sensei', get
       content.append(section);
     }
   }
-  return { show, showHomework, showAssignments: showHomework, showLesson, showAssignment, showProgress, teachLesson };
+  return { show, showHomework, showAssignments: openAssignments, showLesson, showAssignment, showProgress, teachLesson };
 }

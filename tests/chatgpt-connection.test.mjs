@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash, webcrypto} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-import {createChatGPTConnection, mountChatGPTConnection} from '../public/chatgpt-connection.js';
+import {createChatGPTConnection, createChatGPTConnectionView, mountChatGPTConnection} from '../public/chatgpt-connection.js';
 
 const BACKEND='https://koa-personal-companion.elijio-villa.chatgpt.site';
 const PHONE='https://erendragneel.github.io/hiroshi-sensei/';
@@ -151,11 +151,62 @@ test('the connection card reflects real connection state and disables every acti
   assert.equal(inserted[0],card);assert.equal(card['aria-label'],'ChatGPT connection');
   const [copy,actions]=card.children,[title,detail]=copy.children,[connect,retry,disconnect]=actions.children;
   assert.equal(title.textContent,'ChatGPT connected');assert.match(detail.textContent,/offered-model/);
+  assert.equal(card.hidden,true);
   assert.equal(connect.hidden,true);assert.equal(disconnect.hidden,false);
   f.client.setBusy(true);assert.ok(actions.children.every(button=>button.disabled));
   f.client.setBusy(false);assert.ok(actions.children.every(button=>!button.disabled));
   await f.client.disconnect();assert.equal(title.textContent,'Connect your ChatGPT plan');
+  assert.equal(card.hidden,false);
   assert.equal(connect.hidden,false);assert.equal(disconnect.hidden,true);assert.equal(retry.hidden,true);
+});
+
+test('main connection card disappears only after success and reappears for checking and recovery',()=>{
+  class Element {
+    constructor(tag){this.tagName=tag;this.children=[];this.events={};this.classList={toggle(){}};}
+    append(...children){this.children.push(...children);}
+    setAttribute(name,value){this[name]=value;}
+    addEventListener(name,callback){this.events[name]=callback;}
+  }
+  const listeners=new Set();let current={configured:false,stage:'disconnected',message:'Ready',model:'',busy:false};
+  const connection={enabled:true,subscribe(listener){listeners.add(listener);listener(current);return()=>listeners.delete(listener);},connect(){},refresh(){},disconnect(){}};
+  const document={createElement:tag=>new Element(tag)};
+  const view=createChatGPTConnectionView(connection,document);
+  const publish=value=>{current={...current,...value};for(const listener of listeners)listener(current);};
+  assert.equal(view.element.hidden,false);
+  publish({stage:'connecting'});assert.equal(view.element.hidden,false);
+  publish({stage:'connected',configured:true});assert.equal(view.element.hidden,true);
+  publish({busy:true});assert.equal(view.element.hidden,true);
+  for(const stage of ['checking','offline','attention']){publish({stage});assert.equal(view.element.hidden,false,stage);}
+  publish({stage:'connected'});assert.equal(view.element.hidden,true);
+  publish({stage:'disconnected',configured:false});assert.equal(view.element.hidden,false);
+  view.dispose();assert.equal(listeners.size,0);
+});
+
+test('Settings retains shared connection controls and disposed modal views release their subscriptions',async()=>{
+  class Element {
+    constructor(tag){this.tagName=tag;this.children=[];this.events={};this.classList={toggle(){}};}
+    append(...children){this.children.push(...children);}
+    setAttribute(name,value){this[name]=value;}
+    addEventListener(name,callback){this.events[name]=callback;}
+  }
+  const listeners=new Set(),calls=[];let current={configured:true,stage:'connected',message:'Shared Codex / ChatGPT Work allowance.',model:'offered-model',busy:false};
+  const connection={enabled:true,subscribe(listener){listeners.add(listener);listener(current);return()=>listeners.delete(listener);},connect:()=>calls.push('connect'),refresh:()=>calls.push('refresh'),disconnect:()=>calls.push('disconnect')};
+  const document={createElement:tag=>new Element(tag)},main=createChatGPTConnectionView(connection,document);
+  for(let i=0;i<3;i++){
+    const view=createChatGPTConnectionView(connection,document,{surface:'settings'});
+    assert.equal(listeners.size,2);assert.equal(view.element.hidden,false);assert.equal(main.element.hidden,true);
+    const [copy,actions]=view.element.children,[connect,retry,disconnect]=actions.children;
+    assert.match(copy.children[1].textContent,/Shared Codex/);assert.equal(disconnect.hidden,false);
+    disconnect.events.click();assert.equal(calls.at(-1),'disconnect');
+    current={...current,stage:'offline'};for(const listener of listeners)listener(current);
+    assert.equal(view.element.hidden,false);assert.equal(retry.hidden,false);retry.events.click();assert.equal(calls.at(-1),'refresh');
+    current={...current,configured:false,stage:'disconnected'};for(const listener of listeners)listener(current);
+    assert.equal(view.element.hidden,false);assert.equal(connect.hidden,false);connect.events.click();assert.equal(calls.at(-1),'connect');
+    view.dispose();view.dispose();assert.equal(listeners.size,1);
+    const prior=calls.length;disconnect.events.click();assert.equal(calls.length,prior);
+    current={...current,configured:true,stage:'connected'};for(const listener of listeners)listener(current);
+  }
+  main.dispose();assert.equal(listeners.size,0);
 });
 
 test('approval survives Chrome returning to a different PWA window with no shared sessionStorage',async()=>{

@@ -22,6 +22,7 @@ function harness(draft, {live = true, busy = false} = {}) {
     $: id => id === 'message-input' ? input : id === 'modal' ? modal : assert.fail('Unexpected element: ' + id),
     createTeacherUI: options => {hookup = options; return {};},
     setPrimaryNavigation: view => calls.push('navigate:' + view),
+    setConversationFocus: focused => calls.push('focus-view:' + focused),
     showScenes() {}, showPhrases() {}, showMemories() {}, sanitizeTeacherState: next => next,
     openModal() {}, speak() {}, save() {}, updateProgress() {},
     toast: message => notices.push(message),
@@ -57,7 +58,7 @@ test('an empty composer accepts live lesson help and sends only its explicit que
     assert.equal(h.hookup.onAsk(lesson, question), true);
     assert.equal(h.context.activeTeacherContext, lesson);
     assert.deepEqual(h.sent, [question]); assert.equal(h.writes(), 1);
-    assert.deepEqual(h.calls, ['reset', 'navigate:tutor', 'render', 'close', 'resize', 'scroll', 'send']);
+    assert.deepEqual(h.calls, ['reset', 'navigate:tutor', 'focus-view:true', 'render', 'close', 'resize', 'scroll', 'send']);
     assert.deepEqual(h.notices, []);
   }
 });

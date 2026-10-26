@@ -70,7 +70,7 @@
   .page-header{gap:14px;margin-bottom:17px}
   .page-header h1{font-size:23px;line-height:1.25;letter-spacing:-.7px;overflow-wrap:anywhere}
   .page-header .eyebrow{font-size:8px;line-height:1.5}
-  .header-actions,.has-private-chat .header-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:6px}
+  .header-actions,.has-private-chat .header-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;gap:6px}
   .header-actions .ai-chat-link{grid-column:1/-1;white-space:normal}
   .header-actions .install-app-button,.header-actions .language-pill,.header-settings-button{min-height:44px;min-width:0;justify-content:center;gap:6px;padding:8px 6px;font-size:11px}
   .header-actions .install-app-button svg{width:16px;height:16px;flex-shrink:0}
@@ -168,3 +168,55 @@
 .concept-meaning{font-size:12px;font-weight:550;line-height:1.65;color:#52644a;overflow-wrap:anywhere}
 .concept-translation{margin:14px 0 0;padding-top:12px;border-top:1px solid #e2e8db;font-size:13px;line-height:1.8;color:#607653;overflow-wrap:anywhere}
 @media(max-width:700px){.lesson-concept-board{padding:14px;margin:18px 0 22px}.lesson-concept-board h3{font-size:14px}.concept-tokens{gap:7px}.concept-token{flex-basis:92px;padding:11px 10px}.concept-target{font-size:22px}.concept-reading{font-size:11px}.concept-meaning,.concept-translation{font-size:12px}}
+
+/* Author display rules must never override controls hidden by application state. */
+#install-button[hidden],#install-app-button[hidden],#classroom-home[hidden],.chatgpt-connection[hidden]{display:none!important}
+.conversation-focused .learning-plan{display:none}
+.conversation-focused .companion-panel .scene-info{display:none}
+.classroom-home-button{border-color:#cfdcc6;background:#edf3e7}
+.assignment-brief{margin:17px 0;padding:18px;border:1px solid #d9e4cd;border-radius:12px;background:#f0f5e9}
+.assignment-brief h3,.assignment-next h3{margin:0 0 9px;font-family:var(--heading);font-size:17px;font-weight:650;line-height:1.4}
+.assignment-brief p,.assignment-next p{margin:8px 0;font-size:13px;line-height:1.8;color:#607653;overflow-wrap:anywhere}
+.assignment-steps{padding-left:22px;margin:12px 0 0;font-size:13px;line-height:1.8;color:#58704a}
+.assignment-steps li{padding-left:3px;overflow-wrap:anywhere}
+.assignment-steps li+li{margin-top:8px}
+.assignment-steps li::marker{font-weight:700;color:var(--green)}
+.assignment-lesson-help{margin:20px 0;padding:0 16px;border:1px solid #e0e5d6;border-radius:12px;background:#fcfcf7}
+.assignment-lesson-help>summary{cursor:pointer;min-height:48px;padding:13px 0;font-size:13px;font-weight:650;line-height:1.7;color:#59734b;overflow-wrap:anywhere}
+.assignment-lesson-help[open]>summary{border-bottom:1px solid var(--border);margin-bottom:14px}
+.assignment-lesson-help h3{margin:15px 0 10px;font-size:15px;line-height:1.6}
+.assignment-lesson-help p{font-size:13px;line-height:1.85;color:#70835f;overflow-wrap:anywhere}
+.assignment-lesson-help .lesson-concept-board{margin:12px 0 16px}
+.assignment-lesson-help .lesson-example{margin-bottom:10px}
+.assignment-lesson-help .example-target{font-size:20px;color:#4f6a42}
+.assignment-next{margin:20px 0 0;padding:18px;border-top:1px solid #dbe5cf;border-radius:11px;background:#f3f6ee}
+.assignment-next .action-row{gap:9px;align-items:center;margin-top:13px}
+.assignment-next button{min-height:46px;line-height:1.5;white-space:normal}
+.assignment-next .primary-button{display:inline-flex;align-items:center;justify-content:center;padding:12px 18px;font-weight:650}
+@media(min-width:701px){
+  .conversation-focused .game-layout{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}
+  .conversation-focused .companion-panel .scene-illustration{height:100%;min-height:460px}
+  .conversation-focused .conversation-panel{height:calc(100dvh - 190px);min-height:500px;max-height:none}
+}
+@media(max-width:700px){
+  .conversation-focused .page-header{gap:10px;margin-bottom:12px}
+  .conversation-focused .page-header h1{font-size:22px}
+  .conversation-focused .header-actions #classroom-home{grid-column:1/-1;min-height:44px}
+  .conversation-focused .scene-illustration{height:112px}
+  .conversation-focused .scene-illustration .companion-art{height:250px;bottom:-138px}
+  .conversation-focused .floating-note{top:35px}
+  .conversation-focused .companion-nameplate{bottom:9px}
+  .conversation-focused .companion-nameplate h2{font-size:15px}
+  .conversation-focused .companion-nameplate p{font-size:9px}
+  .conversation-focused .conversation-panel{height:clamp(340px,calc(100dvh - 224px - env(safe-area-inset-bottom,0px)),780px);scroll-margin-top:132px}
+  .assignment-brief,.assignment-next{padding:14px}
+  .assignment-brief h3,.assignment-next h3{font-size:16px}
+  .assignment-brief p,.assignment-next p,.assignment-steps{font-size:12px;line-height:1.75}
+  .assignment-steps{padding-left:20px}
+  .assignment-lesson-help{padding:0 13px}
+  .assignment-lesson-help>summary{font-size:12px}
+  .assignment-lesson-help p{font-size:12px}
+  .assignment-lesson-help .lesson-example{padding:12px;gap:8px}
+  .assignment-next .action-row{display:flex;flex-direction:column;align-items:stretch}
+  .assignment-next .action-row>button,.assignment-next>.primary-button{width:100%}
+}

@@ -53,7 +53,7 @@ for (const relativePath of files) {
 }
 await writeFile(path.join(output, '.nojekyll'), '');
 await writeFile(path.join(output, 'classroom-preview.html'), HIROSHI_WIDGET_HTML);
-await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-tutor-navigation';
+await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-personal-learning';
 export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',

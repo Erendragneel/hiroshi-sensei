@@ -186,28 +186,43 @@ export function createChatGPTConnection({backend, phoneURL = PHONE_URL, native =
   };
 }
 
-export function mountChatGPTConnection(connection, document = globalThis.document) {
+// Views share one connection client. A modal owner disposes its view when the
+// modal closes or replaces its contents, releasing the subscription immediately.
+export function createChatGPTConnectionView(connection, document = globalThis.document, {surface = 'main'} = {}) {
   if(!connection.enabled || !document) return null;
-  const anchor = document.querySelector('.game-layout');
-  if(!anchor?.parentNode) return null;
+  const settings = surface === 'settings';
+  let disposed = false;
   const card = document.createElement('section'); card.className = 'chatgpt-connection'; card.setAttribute('aria-label','ChatGPT connection');
+  card.setAttribute('data-surface', settings ? 'settings' : 'main');
   const copy = document.createElement('div'), title = document.createElement('strong'), detail = document.createElement('p');
   detail.setAttribute('aria-live','polite'); copy.append(title, detail);
   const actions = document.createElement('div'); actions.className = 'chatgpt-connection-actions';
   const connect = document.createElement('button'); connect.type='button'; connect.className='primary-button'; connect.textContent='Continue with ChatGPT';
   const retry = document.createElement('button'); retry.type='button'; retry.className='secondary-button'; retry.textContent='Retry connection';
   const disconnect = document.createElement('button'); disconnect.type='button'; disconnect.className='secondary-button'; disconnect.textContent='Disconnect';
-  connect.addEventListener('click', () => { void connection.connect(); });
-  retry.addEventListener('click', () => { void connection.refresh(); });
-  disconnect.addEventListener('click', () => { void connection.disconnect(); });
-  actions.append(connect,retry,disconnect); card.append(copy,actions); anchor.parentNode.insertBefore(card,anchor);
-  connection.subscribe(state => {
+  connect.addEventListener('click', () => { if(!disposed) void connection.connect(); });
+  retry.addEventListener('click', () => { if(!disposed) void connection.refresh(); });
+  disconnect.addEventListener('click', () => { if(!disposed) void connection.disconnect(); });
+  actions.append(connect,retry,disconnect); card.append(copy,actions);
+  const unsubscribe = connection.subscribe(state => {
     title.textContent = ['offline','attention'].includes(state.stage) ? 'Connection needs attention' : ['checking','connecting'].includes(state.stage) ? 'Connecting Hiroshi…' : state.configured ? 'ChatGPT connected' : 'Connect your ChatGPT plan';
     detail.textContent = state.message + (state.configured && state.model ? ` Model: ${state.model}.` : '');
+    // Keep recovery visible during checks and failures. Busy conversation turns
+    // do not bring back a card for an otherwise healthy remembered connection.
+    card.hidden = !settings && state.configured === true && state.stage === 'connected';
     card.classList.toggle('needs-attention', ['offline','attention'].includes(state.stage));
     connect.hidden = state.configured; disconnect.hidden = !state.configured && state.stage !== 'offline';
     retry.hidden = !['offline','attention'].includes(state.stage);
     for(const button of [connect,retry,disconnect]) button.disabled = state.busy;
   });
-  return card;
+  return {element:card, dispose() { if(disposed) return; disposed = true; unsubscribe(); }};
+}
+
+export function mountChatGPTConnection(connection, document = globalThis.document) {
+  if(!connection.enabled || !document) return null;
+  const anchor = document.querySelector('.game-layout');
+  if(!anchor?.parentNode) return null;
+  const view = createChatGPTConnectionView(connection, document);
+  anchor.parentNode.insertBefore(view.element, anchor);
+  return view.element;
 }

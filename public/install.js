@@ -1,6 +1,6 @@
 // Browsers expose installation in different ways. Keep an accessible route to
 // instructions even when a native install prompt is unavailable or dismissed.
-import { APP_CONFIG } from './app-config.js?v=20261026-tutor-navigation';
+import { APP_CONFIG } from './app-config.js?v=20261026-personal-learning';
 export const PHONE_APP_URL = APP_CONFIG.phoneURL;
 
 export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sensei', getConnection = () => ({configured:false, provider:'none'}), phoneURL = PHONE_APP_URL, onExportBackup = null}) {
@@ -12,7 +12,12 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
   const isAppleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isAndroid = /Android/i.test(navigator.userAgent);
   const androidRelease = !APP_CONFIG.native ? APP_CONFIG.androidApp : null;
-  const installed = () => installedThisSession || standalone.matches || navigator.standalone === true;
+  // These are local signals, not a claim about copies installed from another
+  // browser. Do not persist an installation guess alongside the learner's save.
+  const appView = () => standalone.matches || navigator.standalone === true;
+  const installed = () => APP_CONFIG.native === true || installedThisSession || appView();
+  const getInstallState = () => ({native:APP_CONFIG.native === true, appView:appView(), installedThisSession, canPrompt:!installed() && !isLocal && deferredPrompt !== null});
+  const getSettingsLabel = () => installed() ? 'Installation details' : 'Install app';
   const element = (tag, className, text) => {
     const el = document.createElement(tag);
     if(className) el.className = className;
@@ -26,15 +31,13 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     return button;
   };
   function refresh() {
-    const label = installed() ? 'App installed' : 'Install app';
-    for(const id of ['install-app-label', 'install-label']) {
-      const el = document.getElementById(id);
-      if(el) el.textContent = label;
-    }
+    // Installation belongs in Settings. Keep older shells quiet as well as the
+    // current classroom; install events must never reintroduce these controls.
     for(const id of ['install-app-button', 'install-button']) {
       const el = document.getElementById(id);
-      if(el) { el.setAttribute('aria-label', label); el.classList.toggle('is-installed', installed()); }
+      if(el) { el.hidden = true; el.style.display = 'none'; el.tabIndex = -1; el.setAttribute('aria-hidden', 'true'); }
     }
+    return getInstallState();
   }
   async function promptInstall() {
     if(prompting) return;
@@ -46,7 +49,7 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
       await prompt.prompt();
       const choice = await prompt.userChoice;
       if(choice.outcome === 'accepted') toast(`${getName()} is being added to your apps.`);
-      else toast('You can install later from this button or your browser menu.');
+      else toast('You can install later from Settings or your browser menu.');
     } catch {
       show();
     } finally {
@@ -106,12 +109,17 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     // the phone URL first, since localhost on a phone refers to the phone itself.
     if(deferredPrompt && !isLocal && !installed()) { void promptInstall(); return; }
     const name = getName();
-    const container = openModal(installed() ? `${name} is installed` : `Install ${name}`, 'YOUR TEACHER · ON YOUR HOME SCREEN');
+    const container = openModal(installed() ? 'App installation' : `Install ${name}`, 'YOUR TEACHER · ON YOUR HOME SCREEN');
     const hero = element('div', 'install-hero');
     const image = element('img', 'install-app-icon');
     image.src = './assets/icon-180.png'; image.width = 64; image.height = 64; image.alt = '';
     const intro = element('div');
-    intro.append(element('h3', '', installed() ? 'Your own little learning space' : 'One tap away, every day'), element('p', '', installed() ? 'Open your home-screen icon to return to your lessons and conversations.' : 'Add your companion to your home screen and open it like an app.'));
+    const installationNote = APP_CONFIG.native === true
+      ? 'You are using the Android app. Its installation is separate from the GitHub browser game.'
+      : appView() ? 'You are already using the app view. There is nothing else to install here.'
+      : installedThisSession ? `Your browser confirmed installation during this visit. Open your existing ${name} icon to return to your lessons.`
+      : 'Add your tutor to your home screen and open it like an app.';
+    intro.append(element('h3', '', installed() ? 'Your classroom is ready' : 'One tap away, every day'), element('p', '', installationNote));
     hero.append(image, intro); container.append(hero);
 
     if(isLocal) {
@@ -141,6 +149,7 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
         container.append(details);
       }
       container.append(element('p', 'install-small', 'If this page is inside another app, open the link in your regular browser first. Your browser controls whether an install prompt is available.'));
+      container.append(element('p', 'install-small', 'Already added Hiroshi? Open the app icon you already have. This page cannot reliably check installations from another browser.'));
     }
     const note = element('section', 'install-availability');
     note.append(element('h3', '', 'What comes with you'));
@@ -149,10 +158,9 @@ export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sens
     note.append(element('p', '', connection.configured && connection.provider !== 'local' ? 'AI conversation and lesson explanations need an internet connection.' : 'Guided practice is ready now. Live AI availability is shown in Settings; installing this web app does not sign in to ChatGPT.'));
     container.append(note);
   }
-  for(const id of ['install-app-button', 'install-button']) document.getElementById(id)?.addEventListener('click', show);
-  window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); deferredPrompt = event; refresh(); });
+  window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); deferredPrompt = installed() ? null : event; refresh(); });
   window.addEventListener('appinstalled', () => { installedThisSession = true; deferredPrompt = null; refresh(); toast(`${getName()} is now an app.`); });
   standalone.addEventListener?.('change', refresh);
   refresh();
-  return {show, showAndroidUpdate, refresh};
+  return {show, showAndroidUpdate, refresh, getSettingsLabel, getInstallState};
 }
