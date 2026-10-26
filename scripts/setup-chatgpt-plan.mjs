@@ -20,6 +20,12 @@ const TOKEN_LIMIT = 262144;
 const PROVIDER_CODES = new Set(['invalid_client','invalid_grant','invalid_request','invalid_scope','invalid_target',
   'unauthorized_client','unsupported_grant_type','access_denied','server_error','temporarily_unavailable',
   'subscription_sharing_user_not_eligible','chatpass_v2_scope_not_authorized','chatpass_v2_invalid_authorization_context']);
+const HOST_CODES = new Set(['CONNECTION_UNAVAILABLE','CHATGPT_CONNECTION_INTERRUPTED','CHATGPT_ACCESS_DENIED',
+  'CHATGPT_SERVICE_ERROR','CHATGPT_INVALID_RESPONSE','CHATGPT_MODELS_UNAVAILABLE','CHATGPT_NO_MODELS',
+  'CHATGPT_LIMIT_REACHED','IDENTITY_INVALID','IDENTITY_KEY_UNAVAILABLE','INVALID_IMPORT','STORAGE_UNAVAILABLE',
+  'SETUP_EXPIRED','SETUP_BUSY','AI_EMPTY_REPLY','AI_INVALID_REPLY','AI_INCOMPLETE_REPLY','PLAN_PERMISSION_REQUIRED',
+  'AI_INVALID_STREAM','AI_INCOMPLETE','AI_REFUSAL','AI_REPLY_TOO_LARGE','CHATGPT_REQUEST_FAILED']);
+const HOST_STAGES = new Set(['decrypt','identity','checkpoint','models','inference','commit']);
 const random = bytes => randomBytes(bytes).toString('base64url');
 export const pkceChallenge = value => createHash('sha256').update(value,'ascii').digest('base64url');
 const constantEquals = (left,right) => typeof left==='string' && typeof right==='string'
@@ -28,9 +34,13 @@ const constantEquals = (left,right) => typeof left==='string' && typeof right===
 const dictionary = value => value!==null && typeof value==='object' && !Array.isArray(value);
 
 export class SetupError extends Error {
-  constructor(code,message,httpStatus=0,{providerCode,requestId}={}){
+  constructor(code,message,httpStatus=0,{providerCode,requestId,hostCode,hostStage,diagnosticType,responseType}={}){
     super(message);this.name='SetupError';this.code=code;this.httpStatus=httpStatus;
     if(PROVIDER_CODES.has(providerCode))this.providerCode=providerCode;
+    if(HOST_CODES.has(hostCode))this.hostCode=hostCode;
+    if(HOST_STAGES.has(hostStage))this.hostStage=hostStage;
+    if(['Error','TypeError','RangeError','NotSupportedError','DataError','OperationError','InvalidAccessError','BodyTooLarge','InvalidJson','UnreadableBody','ContentType','EventJson','EventTooLarge','DeltaType'].includes(diagnosticType))this.diagnosticType=diagnosticType;
+    if(['json','html','other','event-stream'].includes(responseType))this.responseType=responseType;
     if(typeof requestId==='string'&&(/^(?:req_[A-Za-z0-9_-]{8,100}|[A-Fa-f0-9-]{16,64})$/.test(requestId)))this.requestId=requestId;
   }
 }
@@ -142,6 +152,11 @@ export async function startChatGPTSetup({backend=BACKEND_ORIGIN,siteServiceToken
         if(bootstrap.pendingClientId!==undefined&&bootstrap.pendingClientId!==null&&bootstrap.pendingClientId!==''
           &&(typeof bootstrap.pendingClientId!=='string'||!/^[-A-Za-z0-9_]{4,256}$/.test(bootstrap.pendingClientId)||bootstrap.pendingClientId==='dynamic_agent_client'))throw fail('HOST_RESPONSE_INVALID','The saved ChatGPT app registration could not be verified.');
         try{publicRsaKey(bootstrap.publicKeyJwk);}catch{throw fail('HOST_RESPONSE_INVALID','The hosted encryption key could not be verified.');}
+        if(bootstrap.resumeAvailable!==undefined&&typeof bootstrap.resumeAvailable!=='boolean')throw fail('HOST_RESPONSE_INVALID','The saved setup could not be verified.');
+        if(bootstrap.resumeAvailable===true){
+          stage('VERIFYING_HOSTED_AI');
+          completeHosted(await finishHostedConnection({}),response);return;
+        }
         const metadata=await publicIdentityRequest(OPENAI.discovery);active();
         if(metadata.issuer!==OPENAI.issuer||metadata.authorization_endpoint!==OPENAI.authorize||metadata.token_endpoint!==OPENAI.token||metadata.jwks_uri!==OPENAI.jwks)throw fail('OPENAI_CONFIGURATION_INVALID','OpenAI sign-in configuration could not be verified.');
         const authorization=new URL(OPENAI.authorize);
@@ -185,10 +200,7 @@ export async function startChatGPTSetup({backend=BACKEND_ORIGIN,siteServiceToken
         const sealed=sealCredentialBundle({tokens:imported,clientId,nonce,receivedAt,hostId:bootstrap.hostId},bootstrap.publicKeyJwk);
         stage('VERIFYING_HOSTED_AI');
         const result=await finishHostedConnection(sealed);active();
-        if(result.connected!==true||result.verified!==true)throw fail('HOSTED_VERIFICATION_FAILED','The hosted ChatGPT connection has not completed a verified reply.');
-        const safe={connected:true,verified:true};if(typeof result.model==='string'&&/^[A-Za-z0-9._-]{1,100}$/.test(result.model))safe.model=result.model;
-        stage('CONNECTED');done=true;respond(response,200,'Your hosted ChatGPT connection is ready. You can return to Hiroshi on your phone. This computer is no longer needed for replies.',true);
-        resolveDone(safe);event({type:'complete',...safe});closeServer();
+        completeHosted(result,response);
       }catch(error){finishFailure(error,response);}
       return;
     }
@@ -198,13 +210,22 @@ export async function startChatGPTSetup({backend=BACKEND_ORIGIN,siteServiceToken
     respond(response,404,'This setup link is no longer active. Return to the game or start setup again.');
   });
   server.maxConnections=8;
+  function completeHosted(result,response){
+    active();
+    if(result.connected!==true||result.verified!==true)throw fail('HOSTED_VERIFICATION_FAILED','The hosted ChatGPT connection has not completed a verified reply.');
+    const safe={connected:true,verified:true};if(typeof result.model==='string'&&/^[A-Za-z0-9._-]{1,100}$/.test(result.model))safe.model=result.model;
+    stage('CONNECTED');done=true;respond(response,200,'Your hosted ChatGPT connection is ready. You can return to Hiroshi on your phone. This computer is no longer needed for replies.',true);
+    resolveDone(safe);event({type:'complete',...safe});closeServer();
+  }
   function closeServer(){clearTimeout(timer);closed=true;abort.abort();bootstrap=null;siteServiceToken='';server.close();server.closeIdleConnections?.();}
   function finishFailure(error,response){
     if(done)return;
     const safe=error instanceof SetupError?error:fail('SETUP_INTERRUPTED','The connection could not finish. Return to the assistant to check the setup.');
     if(response&&!response.headersSent)respond(response,400,safe.message);
     done=true;event({type:'error',stage:phase,code:safe.code,httpStatus:safe.httpStatus||0,
-      ...(safe.providerCode?{providerCode:safe.providerCode}:{}),...(safe.requestId?{requestId:safe.requestId}:{})});rejectDone(safe);closeServer();
+      ...(safe.providerCode?{providerCode:safe.providerCode}:{}),...(safe.requestId?{requestId:safe.requestId}:{}),
+      ...(safe.hostCode?{hostCode:safe.hostCode}:{}),...(safe.hostStage?{hostStage:safe.hostStage}:{}),
+      ...(safe.diagnosticType?{diagnosticType:safe.diagnosticType}:{}),...(safe.responseType?{responseType:safe.responseType}:{})});rejectDone(safe);closeServer();
   }
   async function finishHostedConnection(sealed){
     // The host treats this exact capability/envelope as one idempotent import.
@@ -259,7 +280,8 @@ export async function startChatGPTSetup({backend=BACKEND_ORIGIN,siteServiceToken
       const data=await readResponseJson(response,16384).catch(()=>null);
       const providerCode=typeof data?.error==='string'?data.error:dictionary(data?.error)?data.error.code:undefined;
       const requestId=response.headers.get('openai-request-id')||response.headers.get('x-request-id');
-      throw fail(isBackend?'HOST_REQUEST_REJECTED':'OPENAI_REQUEST_REJECTED',isBackend?'The hosted connection did not accept this setup step.':'OpenAI did not accept this sign-in step.',response.status,{providerCode,requestId});
+      throw fail(isBackend?'HOST_REQUEST_REJECTED':'OPENAI_REQUEST_REJECTED',isBackend?'The hosted connection did not accept this setup step.':'OpenAI did not accept this sign-in step.',response.status,{providerCode,requestId,
+        ...(isBackend?{hostCode:providerCode,hostStage:data?.error?.stage,diagnosticType:data?.error?.diagnosticType,responseType:data?.error?.responseType}:{})});
     }
     return readResponseJson(response,TOKEN_LIMIT);
   }
@@ -286,7 +308,7 @@ async function readConfiguration(){
   process.stdout.write('Ready for setup configuration on stdin (input is hidden).\n');
   let input='';
   return new Promise((resolve,reject)=>{
-    const clean=()=>{process.stdin.off('data',onData);process.stdin.off('end',onEnd);if(process.stdin.isTTY)process.stdin.setRawMode(false);process.stdin.pause();};
+    const clean=()=>{process.stdin.off('data',onData);process.stdin.off('end',onEnd);if(process.stdin.isTTY)process.stdin.setRawMode(false);process.stdin.pause();process.stdin.unref?.();};
     const onEnd=()=>{clean();reject(fail('CONFIGURATION_INVALID','Setup configuration was not received.'));};
     const onData=chunk=>{
       input+=chunk.toString('utf8');if(input.includes('\u0003')||input.length>20000){clean();reject(fail('CONFIGURATION_INVALID','Setup configuration could not be accepted.'));return;}

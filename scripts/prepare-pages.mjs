@@ -51,14 +51,15 @@ for (const relativePath of files) {
   await copyFile(path.join(source, relativePath), destination);
 }
 await writeFile(path.join(output, '.nojekyll'), '');
-await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-chatgpt-plan';
+await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-phone-chatgpt';
 export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',
   phoneURL: 'https://erendragneel.github.io/hiroshi-sensei/',
   aiAppURL: null,
   androidApp: ANDROID_RELEASE,
-  apiBase: null
+  chatgptBackend: 'https://koa-personal-companion.elijio-villa.chatgpt.site',
+  apiBase: 'https://koa-personal-companion.elijio-villa.chatgpt.site/api/hiroshi'
 });
 `);
 const fileCount = new Set([...files, '.nojekyll', 'app-config.js']).size;

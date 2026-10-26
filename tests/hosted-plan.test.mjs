@@ -56,12 +56,17 @@ function fixture() {
   const remote = {calls: [], refreshes: 0, smokes: 0, jwksFailures: 0, smokeFailures: 0, rejectRefresh: false, holdRefresh: null};
   const fetchImpl = async (url, options = {}) => {
     remote.calls.push({url, options});
+    assert.equal(options.redirect, 'manual');
+    assert.equal(new Headers(options.headers).get('Accept'), url.endsWith('/responses') ? 'text/event-stream' : 'application/json');
     if (url.endsWith('/.well-known/jwks.json')) {
+      if (remote.redirectJwks) return new Response(null, {status: 302, headers: {Location: 'https://fixture-unapproved.invalid/keys'}});
       if (remote.jwksFailures-- > 0) throw new Error('private-request-data-do-not-expose');
       return Response.json(jwks);
     }
     if (url.endsWith('/models')) {
-      assert.match(options.headers.Authorization, /^Bearer fixture-protected-access/);
+      assert.match(new Headers(options.headers).get('Authorization'), /^Bearer fixture-protected-access/);
+      if (remote.modelHtml) return new Response('<html>fixture-private-provider-detail</html>', {headers: {'Content-Type': 'text/html'}});
+      if (remote.largeCatalog) return Response.json({padding: 'x'.repeat(600_000), models: [{slug: 'fixture-offered-model', display_name: 'Fixture model', visibility: 'list'}]});
       if (remote.denyModels) return Response.json({error: {code: 'unauthorized', message: 'private-request-data-do-not-expose'}}, {status: 401});
       if (remote.holdCatalog) { remote.catalogEntered?.(); await remote.holdCatalog; }
       return Response.json({models: [{slug: 'fixture-offered-model', display_name: 'Fixture model', visibility: 'list'}, {slug: 'hidden', display_name: 'Hidden', visibility: 'hidden'}]});
@@ -198,6 +203,110 @@ test('temporary JWKS and model smoke failures resume the sealed grant without re
   const pending = f.DB.sqlite.prepare('SELECT * FROM hiroshi_imports').get(); assert.ok(pending.record); assert.equal(pending.result, null);
   assert.equal(f.DB.sqlite.prepare('SELECT * FROM hiroshi_connection').get(), undefined);
   f.reopen(); const retry = await f.finish(start, envelope); assert.equal(retry.status, 200); assert.equal((await retry.json()).connected, true);
+});
+
+test('a fresh owner setup recovers an unfinished encrypted grant and revokes the lost helper capability', async () => {
+  const f = fixture(), start = await f.begin(), envelope = await f.seal(start);
+  f.remote.jwksFailures = 1;
+  const failed = await f.finish(start, envelope);
+  assert.equal(failed.status, 503);
+  const diagnostic = await failed.json();
+  assert.equal(diagnostic.error.stage, 'identity');
+  assert.ok(!JSON.stringify(diagnostic).includes('private-request-data'));
+  const expires = f.DB.sqlite.prepare('SELECT expires_at FROM hiroshi_imports').get().expires_at;
+  const resumed = await f.begin();
+  assert.equal(resumed.resumeAvailable, true);
+  assert.notEqual(resumed.importToken, start.importToken);
+  assert.equal(f.DB.sqlite.prepare('SELECT count(*) AS count FROM hiroshi_imports').get().count, 1);
+  assert.equal(f.DB.sqlite.prepare('SELECT expires_at FROM hiroshi_imports').get().expires_at, expires);
+  assert.ok(!['d', 'p', 'q', 'dp', 'dq', 'qi'].some(key => key in resumed.publicKeyJwk));
+  assert.equal((await f.finish(start, envelope)).status, 401);
+  assert.equal((await f.finish(resumed, {})).status, 200);
+  assert.equal((await f.finish(resumed, {})).status, 200);
+  assert.equal(f.remote.smokes, 1);
+});
+
+test('empty import bodies cannot bypass setup or revive an expired unfinished grant', async () => {
+  const f = fixture(), start = await f.begin();
+  assert.equal((await f.finish(start, {})).status, 400);
+  const envelope = await f.seal(start); f.remote.jwksFailures = 1;
+  assert.equal((await f.finish(start, envelope)).status, 503);
+  f.clock.at += 600_001;
+  const next = await f.begin();
+  assert.equal(next.resumeAvailable, undefined);
+  assert.equal((await f.finish(next, {})).status, 400);
+  assert.equal(f.remote.smokes, 0);
+});
+
+test('manual upstream redirect handling works at the edge and never follows an identity redirect', async () => {
+  const f = fixture(), start = await f.begin(), envelope = await f.seal(start);
+  f.remote.redirectJwks = true;
+  const failed = await f.finish(start, envelope);
+  assert.equal(failed.status, 502);
+  const diagnostic = await failed.json();
+  assert.equal(diagnostic.error.code, 'CHATGPT_SERVICE_ERROR');
+  assert.equal(diagnostic.error.stage, 'identity');
+  assert.equal(f.remote.calls.length, 1);
+  assert.ok(f.remote.calls[0].url.endsWith('/.well-known/jwks.json'));
+  assert.equal(f.DB.sqlite.prepare('SELECT * FROM hiroshi_connection').get(), undefined);
+  assert.equal(f.remote.smokes, 0);
+});
+
+test('validated unfinished grants remain recoverable by their owner after the original helper capability expires', async () => {
+  const f = fixture(), start = await f.begin(), envelope = await f.seal(start);
+  f.remote.smokeFailures = 1;
+  assert.equal((await f.finish(start, envelope)).status, 502);
+  assert.ok(f.DB.sqlite.prepare('SELECT record FROM hiroshi_imports').get().record);
+  f.clock.at += 600_001;
+  assert.equal((await f.finish(start, {})).status, 401);
+  const resumed = await f.begin();
+  assert.equal(resumed.resumeAvailable, true);
+  assert.equal((await f.finish(resumed, {})).status, 200);
+  assert.equal(f.remote.smokes, 2);
+});
+
+test('model catalogs above 512 KiB are bounded at 2 MiB and HTML failures expose only static metadata', async () => {
+  const f = fixture(), start = await f.begin(), envelope = await f.seal(start);
+  f.remote.modelHtml = true;
+  const failed = await f.finish(start, envelope);
+  assert.equal(failed.status, 502);
+  const diagnostic = await failed.json();
+  assert.equal(diagnostic.error.diagnosticType, 'InvalidJson');
+  assert.equal(diagnostic.error.responseType, 'html');
+  assert.equal(diagnostic.error.stage, 'models');
+  assert.ok(!JSON.stringify(diagnostic).includes('fixture-private-provider-detail'));
+  f.remote.modelHtml = false; f.remote.largeCatalog = true;
+  assert.equal((await f.finish(start, envelope)).status, 200);
+});
+
+test('invalid stream diagnostics distinguish format failures without exposing response contents', async () => {
+  const cases = [
+    ['application/json', '{"private-provider-data":"fixture-secret"}', 'AI_INCOMPLETE', undefined, 'json'],
+    ['text/html', '<html>fixture-secret</html>', 'AI_INCOMPLETE', undefined, 'html'],
+    ['text/event-stream', 'data: fixture-secret\n\n', 'AI_INVALID_STREAM', 'EventJson', 'event-stream'],
+    ['text/event-stream', 'data: ' + 'x'.repeat(256 * 1024 + 1) + '\n\n', 'AI_INVALID_STREAM', 'EventTooLarge', 'event-stream'],
+    ['text/event-stream', 'data: {"type":"response.output_text.delta","delta":{"private":"fixture-secret"}}\n\n', 'AI_INVALID_STREAM', 'DeltaType', 'event-stream'],
+  ];
+  for (const [contentType, body, code, diagnosticType, responseType] of cases) {
+    await assert.rejects(parseResponseStream(new Response(body, {headers: {'Content-Type': contentType}})), failure => {
+      assert.equal(failure.code, code);
+      assert.equal(failure.diagnosticType, diagnosticType);
+      assert.equal(failure.responseType, responseType);
+      assert.equal(failure.mediaType, contentType);
+      assert.equal(failure.eventCount, code === 'AI_INCOMPLETE' ? 0 : 1);
+      assert.ok(!failure.message.includes('fixture-secret'));
+      return true;
+    });
+  }
+});
+
+test('complete SSE remains verifiable when a gateway omits or replaces its MIME header', async () => {
+  const stream = await completed('Connected.').text();
+  for (const contentType of [null, 'text/plain', 'application/octet-stream']) {
+    const response = new Response(new TextEncoder().encode(stream), {headers: contentType ? {'Content-Type': contentType} : {}});
+    assert.equal(await parseResponseStream(response), 'Connected.');
+  }
+  await assert.rejects(parseResponseStream(new Response('data: {"type":"response.output_text.delta","delta":"partial"}\n\n', {headers: {'Content-Type': 'text/plain'}})), {code: 'AI_INCOMPLETE', mediaType: 'text/plain', eventCount: 1});
 });
 
 test('device code is consumed once, wrong PKCE cannot redeem it, and disconnect preserves the plan connection', async () => {

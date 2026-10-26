@@ -35,7 +35,7 @@ async function fixture(options={}){
     if(url===BACKEND_ORIGIN+'/api/hiroshi/bootstrap/begin'){
       const body=JSON.parse(request.body);assert.equal(body.code,'fixture-host-ticket');
       assert.equal(pkceChallenge(body.verifier),new URL(setup.setupURL).searchParams.get('challenge'));
-      return response({importToken:IMPORT,publicKeyJwk:publicHosting,hostId,pendingClientId:options.returningClient?CLIENT:undefined});
+      return response({importToken:IMPORT,publicKeyJwk:publicHosting,hostId,pendingClientId:options.returningClient?CLIENT:undefined,resumeAvailable:options.resumeAvailable});
     }
     if(url===BACKEND_ORIGIN+'/api/hiroshi/bootstrap/register'){
       assert.equal(request.headers.Authorization,'Bearer '+IMPORT);
@@ -75,9 +75,11 @@ async function fixture(options={}){
       finishes++;
       assert.equal(request.headers.Authorization,'Bearer '+IMPORT);
       assert.ok(!request.body.includes(ACCESS));assert.ok(!request.body.includes(REFRESH));
-      imported=decodeEnvelope(request.body);
+      if(options.resumeAvailable)assert.deepEqual(JSON.parse(request.body),{});
+      else imported=decodeEnvelope(request.body);
       if(options.finish503Once&&finishes===1)return Response.json({error:'fixture-retry'},{status:503});
       if(options.finishDenied)return Response.json({error:'fixture-denied'},{status:403});
+      if(options.hostFailure)return Response.json({error:options.hostFailure},{status:503});
       return response(options.unverified?{connected:true,verified:false}:{connected:true,verified:true,model:'fixture-model'});
     }
     throw new Error('Unexpected fixture destination');
@@ -125,6 +127,30 @@ test('one-time local approval verifies PKCE and identity, then imports only an e
     }
     assert.equal(f.events.filter(event=>event.type==='open_browser').length,1);
     assert.ok(f.events[0].type==='stage');
+  }finally{f.setup.cancel();}
+});
+
+test('a saved hosted approval resumes without another OAuth exchange or browser authorization',async()=>{
+  const f=await fixture({resumeAvailable:true,returningClient:true});
+  try{
+    const params=new URL(f.setup.setupURL).searchParams;
+    const callback=new URL(params.get('return_to'));callback.search=new URLSearchParams({code:'fixture-host-ticket',state:params.get('state')});
+    const result=await fetch(callback,{redirect:'manual'});
+    assert.equal(result.status,200);assert.equal((await f.setup.completion).verified,true);
+    assert.equal(f.exchanges,0);assert.equal(f.finishes,1);
+    assert.equal(f.calls.some(call=>call.url.startsWith(OPENAI.issuer)),false);
+    assert.equal((await result.text()).includes(IMPORT),false);
+  }finally{f.setup.cancel();}
+});
+
+test('host diagnostics expose only allowlisted stages and types without private error details',async()=>{
+  const f=await fixture({resumeAvailable:true,returningClient:true,hostFailure:{code:'CONNECTION_UNAVAILABLE',stage:'identity',diagnosticType:'TypeError',message:'fixture-private-detail'}});
+  try{
+    const rejected=assert.rejects(f.setup.completion,error=>error.hostCode==='CONNECTION_UNAVAILABLE'&&error.hostStage==='identity'&&error.diagnosticType==='TypeError');
+    const params=new URL(f.setup.setupURL).searchParams;
+    const callback=new URL(params.get('return_to'));callback.search=new URLSearchParams({code:'fixture-host-ticket',state:params.get('state')});
+    await fetch(callback);await rejected;
+    assert.ok(!JSON.stringify(f.events).includes('fixture-private-detail'));
   }finally{f.setup.cancel();}
 });
 
@@ -304,6 +330,19 @@ test('identity validation rejects wrong audience, signature, expired claims and 
   assert.throws(()=>validateIdToken(identity(nonce),{keys:[publicSigning,publicSigning]},{clientId:CLIENT,nonce}),error=>error.code==='IDENTITY_NOT_VERIFIED');
 });
 
+function boundedChildExit(exited,timeoutMs=3000){
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(new Error('The setup fixture did not close within its shutdown deadline.')),timeoutMs);
+    exited.then(result=>{clearTimeout(timer);resolve(result);},error=>{clearTimeout(timer);reject(error);});
+  });
+}
+async function stopChild(child,exited){
+  if(child.exitCode!==null||child.signalCode!==null)return;
+  child.kill('SIGTERM');
+  try{await boundedChildExit(exited,1500);}
+  catch{child.kill('SIGKILL');await boundedChildExit(exited,1500);}
+}
+
 for(const [label,terminator] of [['Windows Enter','\r'],['pipe newline','\n']]){
   test(`the CLI accepts ${label} configuration without echoing its service token`,async()=>{
     // Disable upstream fetch in this owned fixture process. Only its local HTTP
@@ -314,7 +353,7 @@ for(const [label,terminator] of [['Windows Enter','\r'],['pipe newline','\n']]){
     let stdout='',stderr='';
     child.stdout.on('data',chunk=>{stdout+=chunk.toString('utf8');});
     child.stderr.on('data',chunk=>{stderr+=chunk.toString('utf8');});
-    const exited=new Promise(resolve=>child.once('exit',resolve));
+    const exited=new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
     const waitUntil=predicate=>new Promise((resolve,reject)=>{
       const timeout=setTimeout(()=>{cleanup();reject(new Error('The setup fixture did not reach its expected state.'));},5000);
       const check=()=>{if(predicate()){cleanup();resolve();}};
@@ -336,7 +375,33 @@ for(const [label,terminator] of [['Windows Enter','\r'],['pipe newline','\n']]){
       assert.ok(!stdout.includes(SERVICE));assert.equal(stderr,'');
       assert.ok(stdout.includes('WAITING_FOR_HOST'));
     }finally{
-      child.kill('SIGTERM');await exited;
+      await stopChild(child,exited);
     }
   });
 }
+
+test('the CLI exits after graceful cancellation with its configuration pipe still open',async()=>{
+  // Emit the signal inside the fixture so Windows also exercises the graceful
+  // handler instead of its forceful child.kill implementation. Keep stdin open
+  // to reproduce the Linux CI pipe that previously prevented process shutdown.
+  const preload='data:text/javascript,'+encodeURIComponent(`
+    globalThis.fetch=()=>{process.stderr.write('UNEXPECTED_UPSTREAM_CALL\\n');throw new Error('upstream disabled in CLI fixture');};
+    const write=process.stdout.write.bind(process.stdout);let scheduled=false;
+    process.stdout.write=(...args)=>{const result=write(...args);if(!scheduled&&String(args[0]).includes('"type":"open_browser"')){scheduled=true;setTimeout(()=>process.emit('SIGTERM'),50);}return result;};
+  `);
+  const child=spawn(process.execPath,['--import',preload,fileURLToPath(new URL('../scripts/setup-chatgpt-plan.mjs',import.meta.url))],
+    {stdio:['pipe','pipe','pipe'],windowsHide:true});
+  let stdout='',stderr='';
+  child.stdout.on('data',chunk=>{stdout+=chunk.toString('utf8');});
+  child.stderr.on('data',chunk=>{stderr+=chunk.toString('utf8');});
+  const exited=new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
+  try{
+    child.stdin.write(JSON.stringify({siteServiceToken:SERVICE})+'\n');
+    const result=await boundedChildExit(exited);
+    assert.deepEqual(result,{code:1,signal:null});
+    assert.ok(stdout.includes('"type":"open_browser"'));
+    assert.ok(stdout.includes('SETUP_CANCELLED'));
+    assert.ok(!stdout.includes(SERVICE));assert.equal(stderr,'');
+    assert.equal(child.stdin.writableEnded,false);
+  }finally{await stopChild(child,exited);}
+});

@@ -34,12 +34,13 @@ const json = (body, status = 200) => Response.json(body, {status, headers: {'Cac
 function redirect(url) { return new Response(null, {status: 302, headers: {Location: url, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'}}); }
 
 async function readTextBounded(response, limit) {
-  if (Number(response.headers.get('content-length')) > limit) { await response.body?.cancel(); throw new Error('Body exceeds limit'); }
+  const tooLarge = () => { const failure = new Error('Body exceeds limit'); failure.name = 'BodyLimitError'; return failure; };
+  if (Number(response.headers.get('content-length')) > limit) { await response.body?.cancel(); throw tooLarge(); }
   const reader = response.body?.getReader(); if (!reader) return '';
   const chunks = []; let length = 0;
   try {
     for (;;) { const {done, value} = await reader.read(); if (done) break; length += value.length;
-      if (length > limit) throw new Error('Body exceeds limit'); chunks.push(value); }
+      if (length > limit) throw tooLarge(); chunks.push(value); }
   } catch (failure) { await reader.cancel().catch(() => {}); throw failure; }
   const all = new Uint8Array(length); let at = 0;
   for (const chunk of chunks) { all.set(chunk, at); at += chunk.length; }
@@ -147,14 +148,27 @@ export function parseChatReply(raw, corrections, teacher) {
 }
 
 export async function parseResponseStream(response) {
-  if (!/^text\/event-stream(?:;|$)/i.test(response.headers.get('content-type') || '')) error(502, 'AI_INVALID_STREAM', 'ChatGPT did not return a readable reply.');
+  const contentType = response.headers.get('content-type') || '';
+  const responseType = /^text\/event-stream(?:;|$)/i.test(contentType) ? 'event-stream' : /\bjson\b/i.test(contentType) ? 'json' : /\bhtml\b/i.test(contentType) ? 'html' : 'other';
+  const mime = contentType.split(';', 1)[0].trim().toLowerCase();
+  const mediaType = mime.length <= 100 && /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mime) ? mime : 'missing-or-invalid';
+  let eventCount = 0;
+  const invalidStream = diagnosticType => {
+    const safe = new HiroshiError(502, 'AI_INVALID_STREAM', 'ChatGPT did not return a readable reply.');
+    safe.diagnosticType = diagnosticType; safe.responseType = responseType; throw safe;
+  };
+  // Some gateways omit/replace the MIME header. Admission rests on bounded
+  // SSE data frames plus a valid response.completed event, never on MIME alone.
+  try {
   const stream = await readTextBounded(response, 2 * 1024 * 1024);
   let delta = '', completed = null;
   for (const block of stream.replaceAll('\r\n', '\n').split('\n\n')) {
     const data = block.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).replace(/^ /, '')).join('\n');
     if (!data) continue;
+    eventCount++;
     if (data === '[DONE]') { if (!completed) error(502, 'AI_INCOMPLETE', 'ChatGPT did not finish that reply.'); continue; }
-    let event; try { if (data.length > 256 * 1024) throw new Error(); event = parse(data); } catch { error(502, 'AI_INVALID_STREAM', 'ChatGPT returned an unreadable reply.'); }
+    if (data.length > 256 * 1024) invalidStream('EventTooLarge');
+    let event; try { event = parse(data); } catch { invalidStream('EventJson'); }
     if (event.type === 'response.failed' || event.type === 'error') {
       const code = event.response?.error?.code || event.error?.code || event.code;
       if (['subscription_sharing_usage_limit_exceeded', 'subscription_sharing_usage_unavailable'].includes(code)) error(429, 'CHATGPT_LIMIT_REACHED', 'Your ChatGPT plan allowance is unavailable or has reached its limit. Review ChatGPT usage settings.');
@@ -163,7 +177,7 @@ export async function parseResponseStream(response) {
     if (['response.incomplete', 'response.cancelled'].includes(event.type)) error(502, 'AI_INCOMPLETE', 'ChatGPT did not finish that reply.');
     if (event.type?.startsWith('response.refusal.')) error(422, 'AI_REFUSAL', 'Hiroshi cannot help with that request. Try another topic.');
     if (event.type === 'response.output_text.delta') {
-      if (typeof event.delta !== 'string') error(502, 'AI_INVALID_STREAM', 'ChatGPT returned an unreadable reply.');
+      if (typeof event.delta !== 'string') invalidStream('DeltaType');
       delta += event.delta; if (delta.length > 40 * 1024) error(502, 'AI_REPLY_TOO_LARGE', 'Ask Hiroshi for a shorter reply.');
     }
     if (event.type === 'response.completed') {
@@ -176,6 +190,12 @@ export async function parseResponseStream(response) {
   }
   if (!completed) error(502, 'AI_INCOMPLETE', 'ChatGPT did not finish that reply.');
   return completed;
+  } catch (failure) {
+    if (failure instanceof HiroshiError) {
+      failure.responseType = responseType; failure.mediaType = mediaType; failure.eventCount = Math.min(eventCount, 100_000);
+    }
+    throw failure;
+  }
 }
 
 export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => Date.now()} = {}) {
@@ -212,8 +232,14 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
   async function upstream(url, options = {}, limit = 512 * 1024) {
     const timeout = AbortSignal.timeout(options.method === 'POST' && url === RESPONSES ? 90_000 : 20_000);
     const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
-    let response; try { response = await fetchImpl(url, {...options, redirect: 'error', signal}); }
-    catch { error(503, 'CHATGPT_CONNECTION_INTERRUPTED', 'The ChatGPT service connection was interrupted. Please retry.'); }
+    // workerd supports manual/follow, but rejects redirect:'error' before I/O.
+    // Manual responses fail the !ok check below; credentials never follow them.
+    const headers = new Headers(options.headers);
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    let response; try { response = await fetchImpl.call(globalThis, url, {...options, headers: Object.fromEntries(headers), redirect: 'manual', signal}); }
+    catch {
+      error(503, 'CHATGPT_CONNECTION_INTERRUPTED', 'The ChatGPT service connection was interrupted. Please retry.');
+    }
     if (!response.ok) {
       let provider = ''; try { const body = parse(await readTextBounded(response, 8192)); provider = typeof body.error === 'string' ? body.error : body.error?.code || ''; } catch { /* Never expose raw provider data. */ }
       if (['invalid_grant', 'invalid_refresh_token', 'refresh_token_expired', 'refresh_token_reused'].includes(provider)) error(401, 'CHATGPT_REAUTHORIZE', 'The ChatGPT connection expired. Run the computer setup again.');
@@ -223,7 +249,13 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
     }
     if (url === RESPONSES) return response;
     try { return parse(await readTextBounded(response, limit)); }
-    catch { error(502, 'CHATGPT_INVALID_RESPONSE', 'The ChatGPT service returned an unreadable response. Please retry.'); }
+    catch (failure) {
+      const safe = new HiroshiError(502, 'CHATGPT_INVALID_RESPONSE', 'The ChatGPT service returned an unreadable response. Please retry.');
+      safe.diagnosticType = failure?.name === 'BodyLimitError' ? 'BodyTooLarge' : failure?.name === 'SyntaxError' ? 'InvalidJson' : 'UnreadableBody';
+      const type = response.headers.get('Content-Type') || '';
+      safe.responseType = /\bjson\b/i.test(type) ? 'json' : /\bhtml\b/i.test(type) ? 'html' : 'other';
+      throw safe;
+    }
   }
   async function identity(jwt, clientId, nonce, receivedAt) {
     if (!jwksCache || now() - jwksAt > 3_600_000) { jwksCache = await upstream(JWKS); jwksAt = now(); }
@@ -248,7 +280,7 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
       earliestRefreshAt: earliest};
   }
   async function catalog(accessToken) {
-    const body = await upstream(MODELS, {headers: {Authorization: `Bearer ${accessToken}`}});
+    const body = await upstream(MODELS, {headers: {Authorization: `Bearer ${accessToken}`}}, 2 * 1024 * 1024);
     if (!Array.isArray(body.models) || body.models.length > 300) error(502, 'CHATGPT_MODELS_UNAVAILABLE', 'The ChatGPT model list could not be read.');
     const seen = new Set(), models = [];
     for (const item of body.models) if (item?.visibility === 'list' && /^[A-Za-z0-9._:/-]{1,160}$/.test(item.slug || '')
@@ -316,14 +348,19 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
   }
   async function finishImport(db, request) {
     const existing = await importRow(db, request), body = await readJson(request, 384 * 1024);
-    if (typeof body.iv !== 'string' || typeof body.ciphertext !== 'string' || typeof body.wrappedKey !== 'string'
-      || Object.keys(body).some(key => !['iv', 'ciphertext', 'wrappedKey'].includes(key))) error(400, 'INVALID_IMPORT', 'The protected connection could not be read.');
-    const envelope = {iv: body.iv, ciphertext: body.ciphertext, wrappedKey: body.wrappedKey}, payloadHash = await digest(JSON.stringify(envelope));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) error(400, 'INVALID_IMPORT', 'The protected connection could not be read.');
+    const empty = Object.keys(body).length === 0;
+    if (empty && existing.result) return json(parse(existing.result));
+    const resumed = empty && existing.payload && existing.private_key;
+    if (!resumed && (typeof body.iv !== 'string' || typeof body.ciphertext !== 'string' || typeof body.wrappedKey !== 'string'
+      || Object.keys(body).some(key => !['iv', 'ciphertext', 'wrappedKey'].includes(key)))) error(400, 'INVALID_IMPORT', 'The protected connection could not be read.');
+    const envelope = resumed ? parse(existing.payload) : {iv: body.iv, ciphertext: body.ciphertext, wrappedKey: body.wrappedKey}, payloadHash = await digest(JSON.stringify(envelope));
     if (existing.payload_hash && existing.payload_hash !== payloadHash) error(409, 'IMPORT_CHANGED', 'This setup attempt already received a different protected connection.');
     if (existing.result) return json(parse(existing.result));
     const hash = existing.hash, lease = random();
     let row = await first(db, 'UPDATE hiroshi_imports SET lease=?,lease_until=? WHERE hash=? AND expires_at>? AND lease_until<=? RETURNING *', lease, now() + 200_000, hash, now(), now());
     if (!row) error(409, 'SETUP_BUSY', 'The setup is already finishing. Retry in a moment.');
+    let stage = 'decrypt';
     try {
       if (row.payload_hash && row.payload_hash !== payloadHash) error(409, 'IMPORT_CHANGED', 'The protected setup connection changed.');
       if (row.result) return json(parse(row.result));
@@ -346,22 +383,32 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
         if (!/^[A-Za-z0-9_-]{4,256}$/.test(clientId || '') || clientId === 'dynamic_agent_client' || !statePattern.test(nonce || '')
           || !Number.isFinite(receivedAt) || receivedAt > now() + 30_000 || now() - receivedAt > TEN_MINUTES
           || hostId !== await host(db) || !tokens || typeof tokens !== 'object' || clientId !== row.client_id) error(400, 'INVALID_IMPORT', 'The setup connection is expired or belongs to another runtime.');
+        stage = 'identity';
         const claims = await identity(tokens.id_token, clientId, nonce, receivedAt);
         const previous = await first(db, 'SELECT record FROM hiroshi_connection WHERE id=1');
         if (previous && parse(previous.record).subject !== claims.sub) error(403, 'CHATGPT_ACCOUNT_MISMATCH', 'Use the same ChatGPT account as the saved Hiroshi connection.');
         record = tokenRecord(tokens, claims, clientId, hostId, receivedAt);
         // Checkpoint the validated grant before an optional model/stream retry.
+        stage = 'checkpoint';
         await run(db, 'UPDATE hiroshi_imports SET record=? WHERE hash=? AND lease=?', JSON.stringify(record), hash, lease);
       }
+      stage = 'models';
       const models = await catalog(record.accessToken), selected = models[0].slug;
+      stage = 'inference';
       const result = await inference(record.accessToken, {model: selected, input: [{role: 'user', content: 'Say exactly: Connected.'}], store: false, stream: true});
       if (!result.trim()) error(502, 'AI_EMPTY_REPLY', 'ChatGPT did not complete the connection check.');
       const summary = {connected: true, verified: true, model: selected, message: 'ChatGPT plan connection verified. Hiroshi can now reconnect on your phone.'};
+      stage = 'commit';
       await db.batch([
         db.prepare('INSERT INTO hiroshi_connection(id,owner_id,record,models,selected,verified_at,lease,lease_until) VALUES(1,?,?,?,?,?,NULL,0) ON CONFLICT(id) DO UPDATE SET owner_id=excluded.owner_id,record=excluded.record,models=excluded.models,selected=excluded.selected,verified_at=excluded.verified_at,lease=NULL,lease_until=0').bind(row.owner_id, JSON.stringify(record), JSON.stringify(models), selected, now()),
         db.prepare('UPDATE hiroshi_imports SET result=?,private_key=NULL,payload=NULL,record=NULL,lease=NULL,lease_until=0 WHERE hash=? AND lease=?').bind(JSON.stringify(summary), hash, lease),
       ]);
       return json(summary);
+    } catch (failure) {
+      const safe = failure instanceof HiroshiError ? failure : new HiroshiError(503, 'CONNECTION_UNAVAILABLE', 'Hiroshi could not complete the connection. Your saved game is safe.');
+      safe.stage = stage;
+      if (!safe.diagnosticType && ['Error', 'TypeError', 'RangeError', 'NotSupportedError', 'DataError', 'OperationError', 'InvalidAccessError'].includes(failure?.name)) safe.diagnosticType = failure.name;
+      throw safe;
     } finally { await run(db, 'UPDATE hiroshi_imports SET lease=NULL,lease_until=0 WHERE hash=? AND lease=?', hash, lease); }
   }
   async function route(request, env) {
@@ -379,10 +426,25 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
     }
     if (request.method === 'POST' && path === '/bootstrap/begin') {
       const body = await readJson(request, 4096), code = await consumeCode(db, body.code, body.verifier, 'setup');
-      const keys = await crypto.subtle.generateKey({name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256'}, true, ['encrypt', 'decrypt']);
-      const privateKey = await crypto.subtle.exportKey('jwk', keys.privateKey), publicKeyJwk = await crypto.subtle.exportKey('jwk', keys.publicKey), importToken = random();
       const previousClient = await config(db, 'client');
       if (previousClient && previousClient.ownerId !== code.owner_id) denied();
+      // An owner-authenticated PKCE setup may rotate the capability of an
+      // unfinished encrypted import. Unverified envelopes keep their original
+      // deadline. An already validated, still-live grant may receive a fresh
+      // ten-minute capability; the lost helper capability is revoked atomically.
+      if (previousClient) {
+        const pending = await first(db, "SELECT hash FROM hiroshi_imports WHERE owner_id=? AND client_id=? AND lease_until<=? AND payload IS NOT NULL AND private_key IS NOT NULL AND result IS NULL AND (expires_at>? OR (record IS NOT NULL AND json_extract(record,'$.expiresAt')>?)) ORDER BY expires_at DESC LIMIT 1", code.owner_id, previousClient.clientId, now(), now(), now() + 5000);
+        if (pending) {
+          const importToken = random();
+          const resumed = await first(db, "UPDATE hiroshi_imports SET hash=?,expires_at=CASE WHEN record IS NOT NULL THEN ? ELSE expires_at END WHERE hash=? AND owner_id=? AND client_id=? AND lease_until<=? AND result IS NULL AND (expires_at>? OR (record IS NOT NULL AND json_extract(record,'$.expiresAt')>?)) RETURNING private_key", await digest(importToken), now() + TEN_MINUTES, pending.hash, code.owner_id, previousClient.clientId, now(), now(), now() + 5000);
+          if (resumed) {
+            const key = parse(resumed.private_key), publicKeyJwk = {kty: key.kty, n: key.n, e: key.e, ext: true, key_ops: ['encrypt']};
+            return json({importToken, publicKeyJwk, hostId: await host(db), pendingClientId: previousClient.clientId, resumeAvailable: true});
+          }
+        }
+      }
+      const keys = await crypto.subtle.generateKey({name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256'}, true, ['encrypt', 'decrypt']);
+      const privateKey = await crypto.subtle.exportKey('jwk', keys.privateKey), publicKeyJwk = await crypto.subtle.exportKey('jwk', keys.publicKey), importToken = random();
       await run(db, 'DELETE FROM hiroshi_imports WHERE expires_at<?', now());
       await run(db, 'INSERT INTO hiroshi_imports(hash,owner_id,private_key,client_id,expires_at,lease_until) VALUES(?,?,?,?,?,0)', await digest(importToken), code.owner_id, JSON.stringify(privateKey), previousClient?.clientId || null, now() + TEN_MINUTES);
       return json({importToken, publicKeyJwk, hostId: await host(db), ...(previousClient ? {pendingClientId: previousClient.clientId} : {})});
@@ -445,7 +507,7 @@ export function createHiroshiHandler({fetchImpl = globalThis.fetch, now = () => 
     try { response = await route(request, env); }
     catch (failure) {
       const safe = failure instanceof HiroshiError ? failure : new HiroshiError(503, 'CONNECTION_UNAVAILABLE', 'Hiroshi could not complete the connection. Your saved game is safe.');
-      response = json({error: {code: safe.code, message: safe.message}}, safe.status);
+      response = json({error: {code: safe.code, message: safe.message, ...(safe.stage ? {stage: safe.stage} : {}), ...(safe.diagnosticType ? {diagnosticType: safe.diagnosticType} : {}), ...(safe.responseType ? {responseType: safe.responseType} : {}), ...(safe.mediaType ? {mediaType: safe.mediaType} : {}), ...(Number.isSafeInteger(safe.eventCount) ? {eventCount: safe.eventCount} : {})}}, safe.status);
     }
     if (origin === ORIGIN) { response.headers.set('Access-Control-Allow-Origin', ORIGIN); response.headers.set('Vary', 'Origin'); }
     response.headers.set('X-Content-Type-Options', 'nosniff'); return response;

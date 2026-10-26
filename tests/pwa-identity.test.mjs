@@ -81,11 +81,11 @@ function workerHarness(cacheNames = [], {offline = false, cached = {}} = {}) {
 
 test('Hiroshi activation preserves Language Miner and unrelated caches', async () => {
   const retained = ['language-miner-v6.4.185-vocabulary-r1', 'language-miner-update-guardian-meta', 'another-app-shell'];
-  const worker = workerHarness([...retained, 'hiroshi-sensei-shell-v11-chatgpt-session', 'hiroshi-sensei-shell-v8-android-startup', 'hiroshi-sensei-shell-v6-phone-chat', 'hiroshi-sensei-shell-v5', 'hiroshi-sensei-shell-v4', 'koa-shell-v4-install']);
+  const worker = workerHarness([...retained, 'hiroshi-sensei-shell-v12-phone-chatgpt', 'hiroshi-sensei-shell-v11-chatgpt-session', 'hiroshi-sensei-shell-v8-android-startup', 'hiroshi-sensei-shell-v6-phone-chat', 'hiroshi-sensei-shell-v5', 'hiroshi-sensei-shell-v4', 'koa-shell-v4-install']);
   await worker.activate();
   for (const name of retained) assert.ok(worker.cacheKeys.has(name), `${name} must survive`);
-  assert.ok(worker.cacheKeys.has('hiroshi-sensei-shell-v11-chatgpt-session'));
-  assert.deepEqual(worker.deleted.sort(), ['hiroshi-sensei-shell-v4', 'hiroshi-sensei-shell-v5', 'hiroshi-sensei-shell-v6-phone-chat', 'hiroshi-sensei-shell-v8-android-startup', 'koa-shell-v4-install']);
+  assert.ok(worker.cacheKeys.has('hiroshi-sensei-shell-v12-phone-chatgpt'));
+  assert.deepEqual(worker.deleted.sort(), ['hiroshi-sensei-shell-v11-chatgpt-session', 'hiroshi-sensei-shell-v4', 'hiroshi-sensei-shell-v5', 'hiroshi-sensei-shell-v6-phone-chat', 'hiroshi-sensei-shell-v8-android-startup', 'koa-shell-v4-install']);
   assert.equal(worker.claimed, true);
 });
 
@@ -114,7 +114,7 @@ test('Hiroshi worker serves and caches its own shell within its scope', async ()
   const response = await worker.fetch(url);
   assert.equal(await response.text(), 'Latest Hiroshi code');
   assert.deepEqual(worker.fetched, [url]);
-  assert.deepEqual(worker.stored.map(({ name, url }) => ({ name, url })), [{ name: 'hiroshi-sensei-shell-v11-chatgpt-session', url }]);
+  assert.deepEqual(worker.stored.map(({ name, url }) => ({ name, url })), [{ name: 'hiroshi-sensei-shell-v12-phone-chatgpt', url }]);
 });
 
 test('new shell installation reloads code and includes the remembered ChatGPT connection module', async () => {

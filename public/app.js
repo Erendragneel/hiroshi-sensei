@@ -1,10 +1,10 @@
 import { SCENES, guidedStart, guidedReply } from './practice.js';
 import { LESSONS, createTeacherState, sanitizeTeacherState } from './teacher-core.js';
 import { createTeacherUI } from './teacher-ui.js';
-import { createInstallUI } from './install.js?v=20261026-chatgpt-plan';
-import { APP_CONFIG } from './app-config.js?v=20261026-chatgpt-plan';
-import { startWebUpdates } from './app-updates.js?v=20261026-chatgpt-plan';
-import { createChatGPTConnection, mountChatGPTConnection } from './chatgpt-connection.js?v=20261026-chatgpt-plan';
+import { createInstallUI } from './install.js?v=20261026-phone-chatgpt';
+import { APP_CONFIG } from './app-config.js?v=20261026-phone-chatgpt';
+import { startWebUpdates } from './app-updates.js?v=20261026-phone-chatgpt';
+import { createChatGPTConnection, mountChatGPTConnection } from './chatgpt-connection.js?v=20261026-phone-chatgpt';
 
 const $ = id => document.getElementById(id);
 const STORE = 'koa.personal.v1';
