@@ -1,12 +1,14 @@
-# Hiroshi sensei — a personal conversation companion
+# Hiroshi sensei — your personal Japanese classroom
 
-An original browser game for relaxed conversation with one companion, inspired by the conversational approach of Amiko. The delivery follows Language Miner: a simple installable web app with bundled practice content. Hiroshi sensei is a separate project; Language Miner was only inspected and was not changed.
+An original browser game for learning Japanese with one illustrated tutor through conversation, visual lessons, and assignments, inspired by the conversational approach of Amiko. The delivery follows Language Miner: a simple installable web app with bundled practice content. Hiroshi sensei is a separate project; Language Miner was only inspected and was not changed.
 
 ## Open the game
 
-Open [Hiroshi on GitHub](https://erendragneel.github.io/hiroshi-sensei/?update=20261026-phone-chatgpt) in your phone's browser and choose **Install app**. This installs the browser game through the browser's own prompt, matching the GitHub installation flow of Language Miner, Gym Stone and Voice Bridge. The Install button does not download an APK or change Android installation permissions. Existing browser installations display **App installed**.
+Open [Hiroshi on GitHub](https://erendragneel.github.io/hiroshi-sensei/?update=20261026-tutor-navigation) in your phone's browser and choose **Install app**. This installs the browser game through the browser's own prompt, matching the GitHub installation flow of Language Miner, Gym Stone and Voice Bridge. The Install button does not download an APK or change Android installation permissions. Existing browser installations display **App installed**.
 
 Guided conversations, authored lessons, homework and saved progress work in the browser app. Web updates arrive from the same GitHub address; **Refresh web game** loads an available update when you are ready. An unfinished message or active reply blocks refresh, and updates do not reset saved work. No Play Store route is required.
+
+The classroom controls are **Tutor → Lessons → Assignments → Progress**. Settings is in the header. A next-step card opens the next lesson or starts a live lesson explanation when the current AI connection is available. Hiroshi remains visible while chatting on the phone and on lesson, assignment, and progress screens. Each lesson includes a visual phrase breakdown. Completing the taught practice assigns homework; drafts save as you type, and submitted work has feedback and review history. Scenes, saved phrases, and the notebook are accessible from Progress or the desktop practice tools. None of these navigation changes resets a save or changes which allowance the AI connection uses.
 
 **Live in-game conversation uses the shared Codex / ChatGPT Work allowance.** Open the GitHub game on your phone, choose **Continue with ChatGPT**, and approve that device once. The game remembers this phone and reconnects automatically on later launches. Internet is required, and your PC can remain off after the completed one-time computer setup. This connection does not use the ordinary ChatGPT chat-message allowance.
 
