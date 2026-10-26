@@ -51,7 +51,7 @@ for (const relativePath of files) {
   await copyFile(path.join(source, relativePath), destination);
 }
 await writeFile(path.join(output, '.nojekyll'), '');
-await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-github-install';
+await writeFile(path.join(output, 'app-config.js'), `import { ANDROID_RELEASE } from './android-release.js?v=20261026-chatgpt-plan';
 export const APP_CONFIG = Object.freeze({
   id: 'hiroshi-sensei',
   name: 'Hiroshi sensei',

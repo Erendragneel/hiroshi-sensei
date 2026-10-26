@@ -1,5 +1,5 @@
-const CACHE = 'hiroshi-sensei-shell-v10-browser-install';
-const SHELL = ['./','./index.html','./style.css','./app.js','./app-config.js','./app-updates.js','./android-release.js','./install.js','./practice.js','./teacher-core.js','./teacher-ui.js','./manifest.webmanifest','./assets/icon.svg','./assets/icon-180.png','./assets/icon-192.png','./assets/icon-512.png','./assets/hiroshi-sensei.png','./assets/room.svg','./assets/walk.svg','./assets/travel.svg'];
+const CACHE = 'hiroshi-sensei-shell-v11-chatgpt-session';
+const SHELL = ['./','./index.html','./style.css','./app.js','./app-config.js','./app-updates.js','./chatgpt-connection.js','./android-release.js','./install.js','./practice.js','./teacher-core.js','./teacher-ui.js','./manifest.webmanifest','./assets/icon.svg','./assets/icon-180.png','./assets/icon-192.png','./assets/icon-512.png','./assets/hiroshi-sensei.png','./assets/room.svg','./assets/walk.svg','./assets/travel.svg'];
 const SHELL_URLS = new Set(SHELL.map(file => new URL(file, self.registration.scope).href));
 const needsFreshCode = url => url.pathname.endsWith('/') || /\.(?:html|js|css)$/i.test(url.pathname);
 // A new worker must not install an old HTML/module copy from the browser's HTTP

@@ -10,6 +10,8 @@ Guided conversations, authored lessons, homework and saved progress work in the 
 
 **Live ChatGPT conversation is not connected in the GitHub browser version.** Restoring browser installation does not add a secure OAuth runtime or hosted AI backend. Do not describe browser installation as enabling ChatGPT sign-in or a verified AI reply.
 
+The remembered browser connection is implemented in `public/chatgpt-connection.js`, `connection-server/`, and `scripts/setup-chatgpt-plan.mjs`. The hosted backend has been deployed privately for owner setup. Activation in the GitHub game remains gated until the owner approves the ChatGPT connection, a completed hosted reply verifies account access, and protected access from GitHub is enabled. The one-time computer helper handles the documented local authorization; later requests and credential renewal run on the host. Browser device sessions are separate from the OpenAI credentials retained by the host.
+
 The separate [Android ChatGPT preview](android/README.md) remains an explicit option under **Settings → Optional Android ChatGPT preview**. It is not the default install or web-update path. It uses an eligible account's plan allowance, internet, and no PC relay or separate API key, subject to normal plan/app limits. Its live phone sign-in remains unverified. [Preview release and files](https://github.com/Erendragneel/hiroshi-sensei/releases/tag/v0.2.3-android-preview.4).
 
 Browser and native Android app storage are separate. Each retains its own progress. To move work between them, export a backup from Settings, restore it at the destination, and review the replacement before confirming. Nothing transfers automatically; installing or updating the browser game never clears the native app's data.

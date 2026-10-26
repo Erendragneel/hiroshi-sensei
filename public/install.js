@@ -1,6 +1,6 @@
 // Browsers expose installation in different ways. Keep an accessible route to
 // instructions even when a native install prompt is unavailable or dismissed.
-import { APP_CONFIG } from './app-config.js?v=20261026-github-install';
+import { APP_CONFIG } from './app-config.js?v=20261026-chatgpt-plan';
 export const PHONE_APP_URL = APP_CONFIG.phoneURL;
 
 export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sensei', getConnection = () => ({configured:false, provider:'none'}), phoneURL = PHONE_APP_URL, onExportBackup = null}) {
