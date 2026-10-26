@@ -1,6 +1,6 @@
 import {HIROSHI_WIDGET_HTML} from './widget.mjs';
 
-export const HIROSHI_RESOURCE_URI = 'ui://hiroshi/classroom-v1.html';
+export const HIROSHI_RESOURCE_URI = 'ui://hiroshi/classroom-v2.html';
 export const HIROSHI_RESOURCE_MIME = 'text/html;profile=mcp-app';
 const SITE_ORIGIN = 'https://koa-personal-companion.elijio-villa.chatgpt.site';
 const RESOURCE_ORIGIN = 'https://erendragneel.github.io';
@@ -146,10 +146,9 @@ function protocol(request, body) {
   return version || '2025-03-26';
 }
 const resourceMeta = Object.freeze({
-  ui: {prefersBorder: true, domain: SITE_ORIGIN, csp: {connectDomains: [], resourceDomains: [RESOURCE_ORIGIN]}},
+  ui: {prefersBorder: true, csp: {connectDomains: [], resourceDomains: [RESOURCE_ORIGIN]}},
   'openai/widgetDescription': 'Hiroshi sensei’s Japanese classroom shows a short lesson, phrase meanings, examples, and practice prompts. The ChatGPT conversation provides the teaching.',
   'openai/widgetPrefersBorder': true,
-  'openai/widgetDomain': SITE_ORIGIN,
   'openai/widgetCSP': {connect_domains: [], resource_domains: [RESOURCE_ORIGIN]},
 });
 

@@ -72,7 +72,8 @@ test('public resource is a static template with no request text or authorization
   assert.equal(resource.mimeType, HIROSHI_RESOURCE_MIME); assert.equal(resource.text, HIROSHI_WIDGET_HTML);
   assert.ok(!resource.text.includes('fixture-user-data'));
   assert.deepEqual(resource._meta.ui.csp, {connectDomains: [], resourceDomains: ['https://erendragneel.github.io']});
-  assert.equal(resource._meta.ui.domain, 'https://koa-personal-companion.elijio-villa.chatgpt.site');
+  assert.equal(resource._meta.ui.domain, undefined);
+  assert.equal(resource._meta['openai/widgetDomain'], undefined);
   const missing = await call(handle, 'resources/read', {uri: 'file:///fixture-secret'});
   assert.equal(missing.status, 404); assert.ok(!JSON.stringify(missing.body).includes('file:///fixture-secret'));
 });
