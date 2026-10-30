@@ -1,5 +1,5 @@
 import {LESSONS} from './teacher-core.js';
-import {validateGeneratedLesson} from './learning-schema.js';
+import {validateGeneratedLesson,getFoundationGroup} from './learning-schema.js';
 
 const extra = [
   {id:'numbers-shopping',title:'A little shopping',objective:'Ask a price and politely choose an item or quantity.',explanation:[
@@ -49,6 +49,8 @@ function choice(id,example,examples) {
   return {id,type:'choice',prompt:`What does ${example.target} mean? (${example.reading})`,options:[...options.slice(shift),...options.slice(0,shift)],answers:[example.meaning],sample:example.meaning,explanation:`${example.target} means “${example.meaning}”`};
 }
 export function buildPreparedLesson(recommendation,state={units:[]},_profile={}) {
+  const foundation=getFoundationGroup(recommendation?.skillId);
+  if(foundation)return buildFoundationLesson(foundation,recommendation?.difficulty,state);
   const base = bank.find(lesson=>lesson.id===recommendation?.skillId) || bank[0];
   const difficulty = [1,2,3].includes(recommendation?.difficulty)?recommendation.difficulty:1;
   const cycle = (state.units||[]).filter(unit=>unit.lesson?.skillId===base.id).length;
@@ -69,4 +71,23 @@ export function buildPreparedLesson(recommendation,state={units:[]},_profile={})
     homework:Array.from({length:4},(_,index)=>difficulty===3&&index>=2?combine(`homework-${index+1}`,examples[(index+1)%examples.length],examples[(index+2)%examples.length]):question(examples[(index+1)%examples.length],index,'homework')),
   };
   return validateGeneratedLesson(lesson,{skillId:base.id,difficulty});
+}
+
+function buildFoundationLesson(group,requestedDifficulty,state) {
+  const difficulty=[1,2,3].includes(requestedDifficulty)?requestedDifficulty:1;
+  const sounds=group.characters.map(character=>character.reading);
+  const review=Math.max(state.foundations?.[group.id]?.length||0,(state.units||[]).filter(unit=>unit.lesson?.skillId===group.id).length);
+  const makeQuestion=(character,index,phase)=>{
+    const shift=(index*2+(phase==='homework'?1:0)+review)%sounds.length;
+    const options=[...sounds.slice(shift),...sounds.slice(0,shift)];
+    const type=difficulty===1?'choice':'write';
+    return {id:`${group.id}-${phase}-${index+1}`,type,prompt:type==='choice'?`Which sound goes with ${character.target}? Choose its English letters.`:`What is the sound of ${character.target}? Type it with English letters.`,options:type==='choice'?options:[],answers:type==='choice'?[character.reading]:[character.reading,...character.aliases],sample:character.reading,explanation:`${character.target} is read ${character.reading}. ${character.meaning}`};
+  };
+  const lesson={skillId:group.id,difficulty,title:group.label,objective:`Recognize ${group.characters.map(character=>character.target).join(' · ')} and match each one to its sound. You can tap an answer or use English letters.`,
+    explanation:group.characters.map(character=>`Look at ${character.target}. Its sound is ${character.reading}. ${character.meaning} These English sound hints are approximate; use Listen for a Japanese voice when available.`),
+    examples:group.characters.map(({target,reading,meaning})=>({target,reading,meaning})),
+    practice:group.characters.map((character,index)=>makeQuestion(character,index,'practice')),
+    homework:Array.from({length:3},(_,index)=>makeQuestion(group.characters[index%group.characters.length],index,'homework')),
+  };
+  return validateGeneratedLesson(lesson,{skillId:group.id,difficulty});
 }

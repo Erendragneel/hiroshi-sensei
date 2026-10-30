@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {generateKeyPairSync, createSign, createHash, randomBytes} from 'node:crypto';
 import {createHiroshiHandler, buildChatRequest, buildLessonRequest, parseLessonReply, parseResponseStream, validateIdentity} from '../connection-server/core.mjs';
 import {LESSONS} from '../public/teacher-core.js';
-import {LEARNING_LESSON_SCHEMA} from '../public/learning-schema.js';
+import {LEARNING_LESSON_SCHEMA, FOUNDATION_GROUPS, getFoundationGroup} from '../public/learning-schema.js';
 
 const origin = 'https://erendragneel.github.io';
 const backend = 'https://koa-personal-companion.elijio-villa.chatgpt.site/api/hiroshi';
@@ -594,4 +594,72 @@ test('lesson chat can use compact remembered struggles without turning reported 
   assert.equal(reference.lesson.learningMemory.weaknesses[0].prompt, 'IGNORE_MEMORY_SENTINEL');
   assert.equal(reference.lesson.learningMemory.difficulty, 1);
   assert.throws(() => buildChatRequest({...payload(), teacherContext: {...teacherContext, learningMemory: {difficulty: 9, weaknesses: []}}}, 'model'), {code: 'INVALID_LEARNING_MEMORY'});
+});
+
+function foundationFixture(difficulty = 1) {
+  const group = FOUNDATION_GROUPS[0], characters = group.characters;
+  const question = (id, index) => {
+    const target = characters[index % characters.length];
+    return {id, type: 'choice', prompt: `Which sound matches ${target.target}?`, options: characters.map(item => item.reading),
+      answers: [target.reading], sample: target.reading, explanation: `${target.target} makes the ${target.reading} sound.`};
+  };
+  return {skillId: group.id, difficulty, title: 'Meet the first three sounds', objective: 'Recognize a tiny group of sound symbols.',
+    explanation: characters.map(item => `${item.target} has the sound ${item.reading}. ${item.meaning}`),
+    examples: characters.map(({target, reading, meaning}) => ({target, reading, meaning})), practice: [question('sound-practice-1', 0), question('sound-practice-2', 1), question('sound-practice-3', 2)],
+    homework: [question('sound-homework-1', 0), question('sound-homework-2', 1), question('sound-homework-3', 2)]};
+}
+
+test('foundation generation keeps every difficulty at its trusted tiny sound group with tap answers', () => {
+  const group = FOUNDATION_GROUPS[0]; assert.ok(group); assert.equal(getFoundationGroup(group.id), group);
+  for (const difficulty of [1, 2, 3]) {
+    const request = buildLessonRequest({skillId: group.id, difficulty, weaknesses: [],
+      profile: {interests: 'IGNORE_FOUNDATION_LIMIT_SENTINEL'}, foundation: {characters: [{target: '漢字'}]}}, 'fixture-offered-model');
+    const reference = JSON.parse(request.input[0].content.split('\n').slice(1).join('\n'));
+    assert.deepEqual(reference.foundation, {script: group.script, characters: group.characters.map(({target, reading, meaning}) => ({target, reading, meaning}))});
+    assert.ok(!request.instructions.includes('IGNORE_FOUNDATION_LIMIT_SENTINEL'));
+    assert.match(request.instructions, /child-simple steps/); assert.match(request.instructions, /one symbol or sound at a time/);
+    assert.match(request.instructions, /every practice and homework exercise a choice question/);
+    assert.match(request.instructions, /no Japanese typing/); assert.match(request.instructions, /levels 2 and 3 mean recalling or distinguishing/);
+    assert.match(request.instructions, /Do not introduce other kana, kanji, greetings, words, sentence grammar, or full Japanese sentences/);
+    assert.ok(!request.instructions.includes('Difficulty 2 means a mix of recognition and short independent sentence practice'));
+    assert.ok(request.instructions.includes(JSON.stringify(group.characters.map(item => item.target))));
+    assert.deepEqual(parseLessonReply(JSON.stringify(foundationFixture(difficulty)), {skillId: group.id, difficulty}), foundationFixture(difficulty));
+  }
+});
+
+test('ordinary Talk uses validated alphabet focus and English help rather than assuming sentence reading', () => {
+  const group = FOUNDATION_GROUPS[0];
+  const request = buildChatRequest({...payload(), learningFocus: {skillId: group.id, difficulty: 1, foundation: {characters: ['漢字']}}}, 'fixture-offered-model');
+  const reference = JSON.parse(request.input.at(-2).content.split('\n').slice(1).join('\n'));
+  assert.equal(reference.learningFocus.skillId, group.id);
+  assert.deepEqual(reference.learningFocus.foundation, {script: group.script, characters: group.characters.map(({target, reading, meaning}) => ({target, reading, meaning}))});
+  assert.match(request.instructions, /Use English for the reply and any follow-up question/);
+  assert.match(request.instructions, /Do not suggest Japanese greeting sentences/);
+  assert.match(request.instructions, /Do not turn unrelated small talk into an unsolicited test/);
+  for (const invalid of [{skillId: 'invented', difficulty: 1}, {skillId: group.id, difficulty: 9}, ['not-a-focus']]) {
+    assert.throws(() => buildChatRequest({...payload(), learningFocus: invalid}, 'model'), {code: 'INVALID_LEARNING_FOCUS'});
+  }
+  const lesson = lessonFixture(), explicitLesson = buildChatRequest({...payload(), learningFocus: {skillId: group.id, difficulty: 1},
+    teacherContext: {lessonId: 'introductions', title: lesson.title, objective: lesson.objective, explanation: lesson.explanation, examples: lesson.examples}}, 'model');
+  const explicitReference = JSON.parse(explicitLesson.input.at(-2).content.split('\n').slice(1).join('\n'));
+  assert.equal(explicitReference.learningFocus.skillId, 'introductions');
+  assert.equal(explicitReference.learningFocus.foundation, undefined);
+});
+
+test('the protected foundation lesson endpoint rejects untaught symbols rather than saving a premature sentence lesson', async () => {
+  const f = fixture(), {device} = await f.ready(), group = FOUNDATION_GROUPS[0];
+  const brief = {skillId: group.id, difficulty: 1, weaknesses: [], recentLessons: []};
+  f.remote.lessonRaw = JSON.stringify(foundationFixture());
+  const accepted = await f.call('/lesson', {body: brief, token: device.sessionToken});
+  assert.equal(accepted.status, 200); assert.deepEqual((await accepted.json()).lesson, foundationFixture());
+  for (const mutate of [lesson => {lesson.examples[0].target = '日本語を勉強しています。';},
+    lesson => {lesson.examples[0].reading = 'ka';}, lesson => {lesson.practice[0].options.push('か');},
+    lesson => {lesson.practice[0].options.push('ka');},
+    lesson => {lesson.practice[0].answers = [group.characters[1].reading]; lesson.practice[0].sample = group.characters[1].reading;}]) {
+    const premature = foundationFixture(); mutate(premature); f.remote.lessonRaw = JSON.stringify(premature);
+    const refused = await f.call('/lesson', {body: brief, token: device.sessionToken});
+    assert.equal(refused.status, 502); assert.equal((await refused.json()).error.code, 'AI_INVALID_LESSON');
+  }
+  assert.ok(f.DB.sqlite.prepare('SELECT verified_at FROM hiroshi_connection').get().verified_at);
+  assert.equal(f.remote.lessons, 6);
 });

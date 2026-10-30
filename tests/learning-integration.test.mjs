@@ -131,6 +131,7 @@ test('malformed adaptive records cannot forge completion or break the valid olde
 function generationHarness({state, live = true, provider = 'chatgpt', enabled = true, fetchImpl} = {}) {
   const calls = [], transitions = [], timers = new Map(); let timerId = 0;
   const context = vm.createContext({state: state || {learning: createLearningState(), profile: {name: 'Elijio', interests: 'music'}},
+    activeTeacherContext:null, LESSONS,
     liveConfigured: live, aiProvider: provider, busy: false, chatGPTConnection: {enabled}, APP_CONFIG: {apiBase: endpoint, chatgptBackend: 'https://koa-personal-companion.elijio-villa.chatgpt.site'},
     clean: (value, max = 2500) => typeof value === 'string' ? value.slice(0, max) : '', getLearningSummary,
     AbortController, DOMException, URL,
@@ -146,6 +147,8 @@ function generationHarness({state, live = true, provider = 'chatgpt', enabled = 
 test('personal lesson generation is explicit, uses the exact configured endpoint, and sends bounded real struggle evidence', async () => {
   const h = validationHarness(), state = h.validate(oldSave(h));
   const started = newUnit(state.learning); state.learning = started.state;
+  const question=started.unit.lesson.practice[0];
+  state.learning=checkLearningAnswer(state.learning,started.unit.id,'lesson',question.id,'a sound I have not learned yet',stamp(11)).state;
   const before = canonical(state.learning), recommendation = getLearningSummary(state.learning, stamp(12)).next;
   const g = generationHarness({state}); assert.equal(g.calls.length, 0);
   const returned = await g.generate(recommendation);
@@ -225,7 +228,7 @@ test('the actual teacher chat context uses persisted adaptive difficulty and str
 test('ordinary Talk remembers the current learning focus and actual weak prompts without changing notebook notes', () => {
   const h = validationHarness(), fresh = h.defaults(); fresh.memories = ['My original notebook note.'];
   const newcomer = generationHarness({state: fresh});
-  assert.equal(newcomer.context.conversationMemories(), fresh.memories);
+  assert.ok(newcomer.context.conversationMemories().at(-1).includes(getLearningSummary(fresh.learning).next.label));
   assert.deepEqual(fresh.memories, ['My original notebook note.']);
   const state = h.validate(oldSave(h)), started = newUnit(state.learning); state.learning = started.state;
   state.memories = Array.from({length: 12}, (_, index) => `${index}: ${'n'.repeat(240)}`);
@@ -240,4 +243,35 @@ test('ordinary Talk remembers the current learning focus and actual weak prompts
   assert.deepEqual(canonical(state.learning), savedLearning); assert.equal(g.calls.length, 0);
   const sendSource = section('async function sendMessage()', '\nfunction openModal(');
   assert.match(sendSource, /memories:\s*conversationMemories\(\)/, 'The actual chat request must use the saved learning summary, not just notebook notes.');
+  assert.match(sendSource, /learningFocus:\s*learningFocus\(\)/);
+});
+
+test('Talk starts from the selected literacy step and lesson help keeps its own saved focus',()=>{
+  const state={learning:createLearningState(),profile:{name:'Elijio'},memories:[]},g=generationHarness({state});
+  assert.deepEqual(canonical(g.context.learningFocus()),{skillId:recommendLesson(state.learning).skillId,difficulty:1});
+  const started=newUnit(state.learning);state.learning=started.state;
+  g.context.activeTeacherContext={lessonId:started.unit.id};
+  assert.deepEqual(canonical(g.context.learningFocus()),{skillId:started.unit.lesson.skillId,difficulty:started.unit.lesson.difficulty});
+  g.context.activeTeacherContext={lessonId:LESSONS[0].id};
+  assert.equal(g.context.learningFocus().skillId,LESSONS[0].id);
+});
+
+test('Assignments routes a new or returning beginner to letters before earlier phrase homework',()=>{
+  for(const teacher of [createTeacherState(),oldCoursework()]){
+    let destination;
+    const context=vm.createContext({state:{learning:importCourseHistory(createLearningState(),teacher),teacher},getLearningSummary,
+      outstandingAssignments:()=>teacher.assignments,
+      learningUI:{showAssignments:()=>{destination='letters';}},teacherUI:{showAssignments:()=>{destination='phrases';}}});
+    vm.runInContext(section('function openLearningAssignments()', '\nfunction updateProgress()'),context);
+    context.openLearningAssignments();assert.equal(destination,'letters');
+    assert.equal(context.state.learning.units.length,0,'Navigation must not invent completed work.');
+  }
+});
+
+test('English alphabet explanations use English chat audio while guided Japanese stays Japanese',()=>{
+  const context=vm.createContext({activeTeacherContext:null,state:{learning:createLearningState(),preferences:{mode:'live',language:'ja'}},getLearningSummary});
+  vm.runInContext(section('function chatMode()', '\nfunction currentScene()'),context);
+  assert.equal(context.chatLanguage(),'en');
+  context.state.preferences.mode='guided';assert.equal(context.chatLanguage(),'ja');
+  context.activeTeacherContext={lessonId:'a-saved-lesson'};assert.equal(context.chatLanguage(),'en');
 });

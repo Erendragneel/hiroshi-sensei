@@ -7,6 +7,15 @@
 .learning-reason .eyebrow{margin:0 0 7px;font-size:9px;color:#789065}
 .learning-reason h3{margin:0 0 10px;font-family:var(--heading);font-size:21px;line-height:1.4;letter-spacing:-.3px}
 .learning-reason p,.learning-memory p,.learning-assignment-empty p{margin:10px 0 0;color:#65785a;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+.learning-writing-path{padding:16px;border:1px solid #dce5d2;border-radius:13px;background:#fbfcf7;margin:16px 0 20px}
+.learning-writing-path h3{font-size:16px;line-height:1.5;margin:0 0 12px}
+.learning-writing-path ol{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));list-style:none;counter-reset:writing-step;padding:0;margin:0;gap:9px}
+.learning-writing-path li{counter-increment:writing-step;padding:12px 10px;border-radius:10px;background:#edf3e5;min-width:0}
+.learning-writing-path li:before{content:counter(writing-step);display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#dbe8cd;color:#527440;font-size:11px;font-weight:700;margin-bottom:7px}
+.learning-writing-path li strong,.learning-writing-path li span{display:block;overflow-wrap:anywhere}
+.learning-writing-path li strong{font-size:12px;color:#4a693d;line-height:1.5}
+.learning-writing-path li span{font-size:10px;line-height:1.6;color:#7d8e6f;margin-top:5px}
+.learning-writing-path>p{font-size:12px;line-height:1.8;color:#718561;margin:12px 0 0}
 .learning-level{display:inline-flex;align-items:center;min-height:28px;border-radius:18px;padding:4px 10px;background:#e4ecdb;color:#48673a;font-size:11px;font-weight:650;line-height:1.4}
 .learning-memory h3,.learning-shortcuts h3,.learning-skills h3,.learning-finished h3{font-size:15px;margin:0 0 10px;font-weight:650}
 .learning-memory{background:#fbfcf8}
@@ -41,6 +50,14 @@
 .learning-reading{font-size:12px;color:#a77c58;line-height:1.8;margin-top:6px!important}
 .learning-meaning{font-size:13px;line-height:1.8;color:#657c56;margin-top:8px!important}
 .learning-example button{font-size:11px;padding:8px 13px;margin-top:13px;background:#fbfcf7}
+.learning-character-card{text-align:center;padding:20px 18px;background:#f4f7ed;border-color:#d0dfc3}
+.learning-character-card .learning-character-label{font-size:10px;line-height:1.6;letter-spacing:.5px;font-weight:650;color:#7c8f69;margin:0 0 4px}
+.learning-character-card .learning-japanese{font-family:'Yu Gothic','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;font-size:88px;line-height:1.3;font-weight:650;letter-spacing:0;margin:6px 0 17px}
+.learning-character-card .learning-reading{font-size:30px;line-height:1.4;font-weight:650;color:#946c45;margin:3px 0 14px!important}
+.learning-character-card .learning-meaning{font-size:14px;line-height:1.8;color:#617b50;margin:5px 0 0!important}
+.learning-character-card button{font-size:12px;padding:10px 16px;margin-top:16px}
+.learning-keyboard-note{font-size:12px;line-height:1.75;padding:10px 12px;border:1px solid #e7dfcc;border-radius:9px;background:#fbf6e9;color:#8a7957;overflow-wrap:anywhere}
+.learning-foundation .learning-choice span{font-size:19px;line-height:1.5}
 .learning-question{margin:24px 0 14px;min-width:0}
 .learning-question fieldset{border:0;padding:0;margin:0 0 14px;min-width:0}
 .learning-question legend{padding:0;margin-bottom:13px;font-family:var(--heading);font-size:16px;font-weight:650;line-height:1.7;color:#3c5f44;overflow-wrap:anywhere}
@@ -95,6 +112,13 @@
   .learning-presence .teacher-presence-copy p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:10px;line-height:1.4;margin-top:4px}
   .learning-reason,.learning-memory,.learning-assignment-empty{padding:14px;margin:15px 0}
   .learning-reason h3{font-size:18px}
+  .learning-writing-path{padding:13px;margin:14px 0 17px}
+  .learning-writing-path h3{font-size:14px}
+  .learning-writing-path ol{gap:6px}
+  .learning-writing-path li{padding:10px 7px}
+  .learning-writing-path li strong{font-size:11px}
+  .learning-writing-path li span{font-size:10px;line-height:1.5}
+  .learning-writing-path>p{font-size:11px}
   .learning-primary-actions,.learning-answer-actions{display:grid;grid-template-columns:1fr;gap:8px}
   .learning-primary-actions button,.learning-answer-actions button{width:100%}
   .learning-primary-actions .primary-button,.learning-answer-actions .primary-button{min-height:48px}
@@ -108,6 +132,13 @@
   .learning-example{padding:14px}
   .learning-japanese{font-size:22px}
   .learning-reading,.learning-meaning{font-size:12px}
+  .learning-character-card{padding:17px 14px}
+  .learning-character-card .learning-japanese{font-size:76px;line-height:1.25;margin:7px 0 14px}
+  .learning-character-card .learning-reading{font-size:27px;margin-bottom:12px!important}
+  .learning-character-card .learning-meaning{font-size:13px}
+  .learning-character-card button{font-size:12px}
+  .learning-keyboard-note{font-size:11px}
+  .learning-foundation .learning-choice span{font-size:18px}
   .learning-question{scroll-margin-top:12px}
   .learning-question fieldset,.learning-question legend{scroll-margin-top:12px}
   .learning-question legend{font-size:14px}

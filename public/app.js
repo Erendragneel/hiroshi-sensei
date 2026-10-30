@@ -3,10 +3,10 @@ import { LESSONS, createTeacherState, sanitizeTeacherState } from './teacher-cor
 import { createTeacherUI } from './teacher-ui.js';
 import { createLearningState, sanitizeLearningState, importCourseHistory, getLearningSummary } from './learning-core.js';
 import { createLearningUI } from './learning-ui.js';
-import { createInstallUI } from './install.js?v=20261030-adaptive-teacher';
-import { APP_CONFIG } from './app-config.js?v=20261030-adaptive-teacher';
-import { startWebUpdates } from './app-updates.js?v=20261030-adaptive-teacher';
-import { createChatGPTConnection, mountChatGPTConnection, createChatGPTConnectionView } from './chatgpt-connection.js?v=20261030-adaptive-teacher';
+import { createInstallUI } from './install.js?v=20261030-kana-foundations';
+import { APP_CONFIG } from './app-config.js?v=20261030-kana-foundations';
+import { startWebUpdates } from './app-updates.js?v=20261030-kana-foundations';
+import { createChatGPTConnection, mountChatGPTConnection, createChatGPTConnectionView } from './chatgpt-connection.js?v=20261030-kana-foundations';
 
 const $ = id => document.getElementById(id);
 const STORE = 'koa.personal.v1';
@@ -48,7 +48,7 @@ mountChatGPTConnection(chatGPTConnection);
 function save(){try{localStorage.setItem(STORE,JSON.stringify(state));}catch{storageAvailable=false;toast('Browser storage is full or unavailable. Export a backup to keep your progress.');}}
 function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4300);}
 function chatMode(){return activeTeacherContext?'live':state.preferences.mode;}
-function chatLanguage(){return activeTeacherContext?'en':state.preferences.language;}
+function chatLanguage(){return activeTeacherContext||(chatMode()==='live'&&getLearningSummary(state.learning).next.foundation)?'en':state.preferences.language;}
 function currentScene(){return SCENES.find(s=>s.id===state.scene)||SCENES[0];}
 function sessionKey(){return activeTeacherContext?`teacher:${activeTeacherContext.lessonId}:ja`:`${chatMode()}:${state.scene}:${state.preferences.language}`;}
 function session(){const key=sessionKey();if(!state.sessions[key]){const greetings={ja:['こんにちは。今日は何について話しましょうか？','Konnichiwa. Kyō wa nani ni tsuite hanashimashō ka?','Hi. What would you like to talk about today?'],en:['Hi. What would you like to talk about today?','',''],es:['Hola. ¿De qué te gustaría hablar hoy?','','Hi. What would you like to talk about today?'],ko:['안녕하세요. 오늘은 무엇에 대해 이야기할까요?','Annyeonghaseyo. Oneureun mueose daehae iyagihalkkayo?','Hi. What would you like to talk about today?']};const g=greetings[state.preferences.language];const opening=activeTeacherContext?{reply:`Let’s work on “${activeTeacherContext.title}”. I can explain the idea, show another example, or help you work through a question.`,reading:'',translation:'',suggestions:[]}:chatMode()==='guided'?guidedStart(state.scene,state.preferences.language):{reply:g[0],reading:g[1],translation:g[2],suggestions:[]};state.sessions[key]={stage:0,complete:false,messages:[{...opening,role:'assistant',id:crypto.randomUUID()}]};}return state.sessions[key];}
@@ -101,8 +101,8 @@ function updateLearningPlan() {
   learningPlan.title.textContent=active?.lesson?.title||summary.next.label;
   learningPlan.summary.textContent=active ? (active.phase==='assignment'?'Your practice is done. Continue your saved assignment and review its feedback.':active.lesson.objective) : summary.next.reason;
   learningPlan.status.textContent=`${summary.completedUnits} saved personal lessons completed · ${pending} assignment${pending===1?'':'s'} to work on · ${level}`;
-  learningPlan.teach.textContent=active?'Continue my lesson':liveConfigured&&aiProvider==='chatgpt'?'Create my next lesson':'Start step-by-step lesson';
-  learningPlan.teach.title=active?'Resume your saved teaching and practice':liveConfigured&&aiProvider==='chatgpt'?'Ask Hiroshi for a lesson based on your practice history':'Use a prepared lesson matched to your practice history';
+  learningPlan.teach.textContent=active?'Continue my lesson':summary.next.foundation?'Start my letter lesson':liveConfigured&&aiProvider==='chatgpt'?'Create my next lesson':'Start step-by-step lesson';
+  learningPlan.teach.title=active?'Resume your saved teaching and practice':summary.next.foundation?'Learn a few Japanese characters and sounds, one question at a time':liveConfigured&&aiProvider==='chatgpt'?'Ask Hiroshi for a lesson based on your practice history':'Use a prepared lesson matched to your practice history';
   learningPlan.assignments.textContent=pending?`Open assignment (${pending})`:'Assignments';
   learningPlan.review.hidden=false;
   for(const id of ['assignment-count','mobile-assignments-count']){const badge=$(id);if(badge){badge.textContent=pending;badge.hidden=pending===0;}}
@@ -110,6 +110,7 @@ function updateLearningPlan() {
 }
 function openLearningAssignments(){
   const summary=getLearningSummary(state.learning);
+  if(summary.next.foundation)return learningUI.showAssignments();
   if(summary.pendingAssignments>0)return learningUI.showAssignments();
   if(outstandingAssignments().length||(!state.learning.units.length&&!state.teacher.assignments.length))return teacherUI.showAssignments();
   return learningUI.showAssignments();
@@ -131,7 +132,7 @@ function setBusy(value){busy=value;chatGPTConnection.setBusy(value);if(!value&&w
 function resizeComposer(){const t=$('message-input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,100)+'px';}
 function resetPending(){requestVersion++;abortController?.abort();abortController=null;if(recognition){recognition.stop();recognition=null;}$('mic-button').classList.remove('recording');setBusy(false);}
 async function sendMessage(){const text=$('message-input').value.trim();if(!text||busy)return;if(text.length>2500){toast('Keep your message under 2,500 characters.');return;}if(chatMode()==='live'&&!liveConfigured){showSettings();toast('Live AI needs its secure connection. Guided scenes work now.');return;}const s=session(),key=sessionKey(),version=++requestVersion,language=activeTeacherContext?'ja':state.preferences.language;const user={role:'user',text,id:crypto.randomUUID()};s.messages.push(user);s.messages=s.messages.slice(-80);renderMessage(user);$('message-input').value='';resizeComposer();setBusy(true);const loading=node('article','message loading');loading.setAttribute('aria-label',`${state.profile.companionName} is replying`);const bubble=node('div','message-bubble');for(let i=0;i<3;i++)bubble.append(node('span','typing-dot'));loading.append(bubble);$('messages').append(loading);scrollConversation();let result;
-  try{if(chatMode()==='guided'){await new Promise(resolve=>setTimeout(resolve,550));result=guidedReply(state.scene,s.stage,text,language);}else{abortController=new AbortController();const timer=setTimeout(()=>abortController.abort(),aiProvider==='local'?(activeTeacherContext?245000:125000):aiProvider==='chatgpt'?150000:45000);let response;try{if(!APP_CONFIG.apiBase)throw new Error('AI conversation needs a connected backend. Guided scenes and coursework are ready here.');response=await appFetch(`${APP_CONFIG.apiBase}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},signal:abortController.signal,body:JSON.stringify({messages:s.messages.slice(-24).map(m=>({role:m.role,content:m.role==='user'?m.text:m.reply})),scene:state.scene,language,level:state.preferences.level,profile:state.profile,memories:conversationMemories(),corrections:state.preferences.corrections,...(activeTeacherContext?{teacherContext:teacherConversationContext()}:{})})});}finally{clearTimeout(timer);}const data=await response.json().catch(()=>null);if(!response.ok){if(data?.error?.code==='AI_NOT_CONFIGURED')liveConfigured=false;throw new Error(data?.error?.message||'Your companion couldn’t connect. Please try again.');}if(!data||typeof data.reply!=='string')throw new Error('The connection returned an unexpected reply. Please try again.');result=data;}
+  try{if(chatMode()==='guided'){await new Promise(resolve=>setTimeout(resolve,550));result=guidedReply(state.scene,s.stage,text,language);}else{abortController=new AbortController();const timer=setTimeout(()=>abortController.abort(),aiProvider==='local'?(activeTeacherContext?245000:125000):aiProvider==='chatgpt'?150000:45000);let response;try{if(!APP_CONFIG.apiBase)throw new Error('AI conversation needs a connected backend. Guided scenes and coursework are ready here.');response=await appFetch(`${APP_CONFIG.apiBase}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},signal:abortController.signal,body:JSON.stringify({messages:s.messages.slice(-24).map(m=>({role:m.role,content:m.role==='user'?m.text:m.reply})),scene:state.scene,language,level:state.preferences.level,profile:state.profile,memories:conversationMemories(),learningFocus:learningFocus(),corrections:state.preferences.corrections,...(activeTeacherContext?{teacherContext:teacherConversationContext()}:{})})});}finally{clearTimeout(timer);}const data=await response.json().catch(()=>null);if(!response.ok){if(data?.error?.code==='AI_NOT_CONFIGURED')liveConfigured=false;throw new Error(data?.error?.message||'Your companion couldn’t connect. Please try again.');}if(!data||typeof data.reply!=='string')throw new Error('The connection returned an unexpected reply. Please try again.');result=data;}
     if(version!==requestVersion||key!==sessionKey())return;loading.remove();const msg=validateMessage({...result,role:'assistant',id:crypto.randomUUID()});if(!msg)throw new Error('No reply arrived. Please try again.');s.messages.push(msg);if(chatMode()==='guided'){const newlyComplete=!s.complete&&result.complete;s.stage=result.stage;s.complete=result.complete===true;if(result.matched){state.progress.days[dayKey()]=(state.progress.days[dayKey()]||0)+1;}renderMessage(msg);if(newlyComplete){if(!state.progress.completed.includes(state.scene))state.progress.completed.push(state.scene);showComplete();}}else{state.progress.days[dayKey()]=(state.progress.days[dayKey()]||0)+1;renderMessage(msg);}save();updateProgress();if(state.preferences.autoVoice)speak(msg.reply,chatLanguage());scrollConversation();
   }catch(error){if(version!==requestVersion)return;loading.remove();s.messages=s.messages.filter(m=>m.id!==user.id);$('messages').querySelector(`[data-message-id="${user.id}"]`)?.remove();$('message-input').value=text;resizeComposer();showSystem('That reply didn’t arrive.',error.name==='AbortError'?'The connection took too long. Your message is back in the box so you can try again.':clean(error.message,350));scrollConversation();save();}finally{if(version===requestVersion){loading.remove();setBusy(false);updateIdentity();$('message-input').focus({preventScroll:true});}}
 }
@@ -162,9 +163,14 @@ function learningMemory() {
   return {difficulty:summary.activeUnit?.lesson?.difficulty||summary.next.difficulty,
     weaknesses:summary.weaknesses.slice(0,6).map(item=>({prompt:clean(item.prompt,240),feedback:clean(item.feedback,400),answer:clean(item.answer,240)}))};
 }
+function learningFocus(){
+  const summary=getLearningSummary(state.learning);
+  const contextUnit=activeTeacherContext?state.learning.units.find(unit=>unit.id===activeTeacherContext.lessonId):null;
+  const course=activeTeacherContext?LESSONS.find(lesson=>lesson.id===activeTeacherContext.lessonId):null;
+  return {skillId:contextUnit?.lesson.skillId||course?.id||summary.next.skillId,difficulty:contextUnit?.lesson.difficulty||summary.next.difficulty};
+}
 function conversationMemories(){
   const summary=getLearningSummary(state.learning);
-  if(!summary.activeUnit&&!summary.weaknesses.length&&!summary.skills.some(skill=>skill.attempts))return state.memories;
   const level=({1:'With help',2:'On your own',3:'Challenge'})[summary.next.difficulty];
   const struggles=summary.weaknesses.slice(0,2).map(item=>item.prompt).join('; ');
   const note=clean(`Saved Japanese learning: ${summary.next.label}; support: ${level}. ${struggles?`Practise again: ${struggles}`:'Use a small next step and one practice question at a time.'}`,250);

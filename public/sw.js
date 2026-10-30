@@ -1,4 +1,4 @@
-const CACHE = 'hiroshi-sensei-shell-v16-adaptive-teacher';
+const CACHE = 'hiroshi-sensei-shell-v17-kana-foundations';
 const SHELL = ['./','./index.html','./style.css','./app.js','./app-config.js','./app-updates.js','./chatgpt-connection.js','./android-release.js','./install.js','./practice.js','./teacher-core.js','./teacher-ui.js','./learning-core.js','./learning-curriculum.js','./learning-schema.js','./learning-ui.js','./learning.css','./manifest.webmanifest','./assets/icon.svg','./assets/icon-180.png','./assets/icon-192.png','./assets/icon-512.png','./assets/hiroshi-sensei.png','./assets/room.svg','./assets/walk.svg','./assets/travel.svg'];
 const SHELL_URLS = new Set(SHELL.map(file => new URL(file, self.registration.scope).href));
 const needsFreshCode = url => url.pathname.endsWith('/') || /\.(?:html|js|css)$/i.test(url.pathname);

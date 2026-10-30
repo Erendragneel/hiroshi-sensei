@@ -1,11 +1,15 @@
 import {LESSONS,gradeExercise,sanitizeTeacherState} from './teacher-core.js';
-import {LEARNING_SKILLS,validateGeneratedLesson} from './learning-schema.js';
-export {LEARNING_SKILLS,validateGeneratedLesson} from './learning-schema.js';
-export {buildPreparedLesson} from './learning-curriculum.js';
+import {LEARNING_SKILLS,validateGeneratedLesson,FOUNDATION_GROUPS,isFoundationSkill,getFoundationGroup,validateFoundationExercise} from './learning-schema.js';
+import {buildPreparedLesson} from './learning-curriculum.js';
+export {LEARNING_SKILLS,validateGeneratedLesson,FOUNDATION_GROUPS,FOUNDATION_SKILLS,isFoundationSkill,getFoundationGroup} from './learning-schema.js';
+export {buildPreparedLesson};
 
 // Evidence is checked again from saved answers. The model never assigns scores,
 // levels, completion, or a proficiency certificate.
 const MAX_UNITS=40, MAX_ATTEMPTS=24, MAX_LEGACY=360;
+const trustedLessons=new WeakSet(),trustedProofs=new WeakMap();
+function freezeData(value){if(value&&typeof value==='object'){for(const child of Object.values(value))freezeData(child);Object.freeze(value);}return value;}
+function checkedLesson(raw){if(raw&&trustedLessons.has(raw))return raw;const lesson=freezeData(validateGeneratedLesson(raw));trustedLessons.add(lesson);return lesson;}
 const knownSkill=id=>LEARNING_SKILLS.find(skill=>skill.id===id);
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const validId=value=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9:_-]{0,159}$/.test(value);
@@ -18,7 +22,7 @@ const questions=(unit,phase)=>unit.lesson[side(phase)];
 const latest=(unit,phase,id)=>unit[side(phase)].attempts.findLast(attempt=>attempt.exerciseId===id);
 const checked=(unit,phase,question)=>{const attempt=latest(unit,phase,question.id);return Boolean(attempt?.correct&&attempt.answer===unit[side(phase)].answers[question.id]);};
 const dateAfter=(stamp,days)=>new Date(Date.parse(stamp)+days*86400000).toISOString();
-export function createLearningState(){return {version:1,units:[],evidence:[],importedKeys:[]};}
+export function createLearningState(){return {version:1,units:[],evidence:[],importedKeys:[],foundations:{}};}
 
 function cleanPhase(raw,exercises) {
   const answers=Object.fromEntries(exercises.map(question=>[question.id,answerText(raw?.answers?.[question.id])]));
@@ -42,7 +46,7 @@ function cleanPhase(raw,exercises) {
 }
 function cleanUnit(raw) {
   if(!record(raw)||!validId(raw.id)||!iso(raw.createdAt))return null;
-  let lesson;try{lesson=validateGeneratedLesson(raw.lesson);}catch{return null;}
+  let lesson;try{lesson=checkedLesson(raw.lesson);}catch{return null;}
   const unit={id:raw.id,lesson,source:raw.source==='ai'?'ai':'authored',createdAt:iso(raw.createdAt),phase:'lesson',practiceIndex:0,homeworkIndex:0,practice:cleanPhase(raw.practice,lesson.practice),homework:cleanPhase(raw.homework,lesson.homework),completedAt:null};
   const firstMissing=lesson.practice.findIndex(question=>!checked(unit,'lesson',question));
   const maxPractice=firstMissing<0?lesson.practice.length-1:firstMissing;
@@ -67,16 +71,83 @@ function cleanLegacy(raw) {
   const answer=answerText(raw.answer);
   return {key:raw.key,unitId:raw.unitId,skillId:raw.skillId,difficulty:1,phase:raw.phase,exerciseId:question.id,answer,at:iso(raw.at),hinted:false,firstAttempt:raw.firstAttempt===true,completed:raw.completed===true,...gradeExercise(question,answer),prompt:question.prompt};
 }
+function cleanFoundationProof(raw,group) {
+  if(raw&&trustedProofs.get(raw)===group.id)return raw;
+  if(!record(raw)||!validId(raw.unitId)||!iso(raw.completedAt)||![1,2,3].includes(raw.difficulty))return null;
+  const proof={unitId:raw.unitId,completedAt:iso(raw.completedAt),difficulty:raw.difficulty,practice:[],homework:[]}, ids=new Set();
+  for(const phase of ['practice','homework']){
+    const checks=raw[phase];if(!Array.isArray(checks)||checks.length<(phase==='practice'?2:3)||checks.length>(phase==='practice'?3:4))return null;
+    for(const check of checks){
+      let question;try{question=validateFoundationExercise(check?.question,group.id);}catch{return null;}
+      if(ids.has(question.id)||typeof check.answer!=='string'||typeof check.firstAnswer!=='string'||typeof check.firstHinted!=='boolean'||typeof check.hinted!=='boolean'||!iso(check.at)||!iso(check.firstAt))return null;
+      ids.add(question.id);
+      const answer=answerText(check.answer),firstAnswer=answerText(check.firstAnswer);
+      if(!gradeExercise(question,answer).correct)return null;
+      proof[phase].push({question,answer,firstAnswer,firstHinted:check.firstHinted,hinted:check.hinted,firstAt:iso(check.firstAt),at:iso(check.at)});
+    }
+    if(group.characters.some(character=>!proof[phase].some(check=>check.question.answers.includes(character.reading))))return null;
+  }
+  freezeData(proof);trustedProofs.set(proof,group.id);return proof;
+}
+function proofForUnit(unit) {
+  if(unit.phase!=='complete'||!isFoundationSkill(unit.lesson.skillId))return null;
+  const proof={unitId:unit.id,completedAt:unit.completedAt,difficulty:unit.lesson.difficulty,practice:[],homework:[]};
+  for(const phase of ['lesson','assignment'])for(const question of questions(unit,phase)){
+    const attempts=unit[side(phase)].attempts.filter(attempt=>attempt.exerciseId===question.id),first=attempts[0],last=attempts.at(-1);
+    if(!first||!last)return null;
+    proof[side(phase)].push({question,answer:last.answer,firstAnswer:first.answer,firstHinted:first.hinted,hinted:last.hinted,firstAt:first.at,at:last.at});
+  }
+  return cleanFoundationProof(proof,getFoundationGroup(unit.lesson.skillId));
+}
+function independentlyRecalls(proof,character) {
+  // Count only the first homework question for this character in a session.
+  // A repeated review item later in the same assignment may follow shown help.
+  const check=proof.homework.find(item=>item.question.prompt.includes(character.target));
+  return Boolean(check&&!check.firstHinted&&!check.hinted&&gradeExercise(check.question,check.firstAnswer).correct);
+}
+function foundationReady(foundations,group) {
+  const records=foundations?.[group.id]||[];
+  return group.characters.every(character=>records.some(proof=>independentlyRecalls(proof,character)));
+}
+function foundationProofs(raw,units) {
+  const foundations={};
+  for(const group of FOUNDATION_GROUPS){
+    const proofs=new Map();
+    for(const item of (Array.isArray(raw?.[group.id])?raw[group.id]:[]).slice(-8)){const proof=cleanFoundationProof(item,group);if(proof)proofs.set(proof.unitId,proof);}
+    for(const unit of units.filter(item=>item.lesson.skillId===group.id)){const proof=proofForUnit(unit);if(proof)proofs.set(proof.unitId,proof);}
+    const records=[...proofs.values()].sort((a,b)=>a.completedAt.localeCompare(b.completedAt)||a.unitId.localeCompare(b.unitId));
+    if(records.length){
+      const retained=new Map();
+      for(const proof of [records[0],...records.slice(-2)])retained.set(proof.unitId,proof);
+      // Preserve a checked independent proof for EACH sound, even if later
+      // reviews need help. This is compact, durable prerequisite evidence.
+      for(const character of group.characters){const proof=records.find(item=>independentlyRecalls(item,character));if(proof)retained.set(proof.unitId,proof);}
+      foundations[group.id]=[...retained.values()].sort((a,b)=>a.completedAt.localeCompare(b.completedAt)||a.unitId.localeCompare(b.unitId));
+    }
+  }
+  return foundations;
+}
+function nextFoundation(raw) {
+  const foundations=raw?.foundations||{};
+  return FOUNDATION_GROUPS.find(group=>!foundationReady(foundations,group))||null;
+}
+export function getNextFoundation(raw){return nextFoundation(sanitizeLearningState(raw));}
+function selectedActiveUnit(state) {
+  const foundation=nextFoundation(state);
+  return state.units.find(unit=>unit.phase!=='complete'&&(!foundation||unit.lesson.skillId===foundation.id))||null;
+}
 export function sanitizeLearningState(raw) {
   const state=createLearningState();if(!record(raw)||raw.version!==1)return state;
   const units=(Array.isArray(raw.units)?raw.units:[]).slice(-80).map(cleanUnit).filter(Boolean), used=new Set();
-  const pending=units.filter(unit=>unit.phase!=='complete').slice(0,4), done=units.filter(unit=>unit.phase==='complete');
+  state.foundations=foundationProofs(raw.foundations,units);
+  const foundation=nextFoundation(state);
+  const pending=units.filter(unit=>unit.phase!=='complete').sort((a,b)=>Number(b.lesson.skillId===foundation?.id)-Number(a.lesson.skillId===foundation?.id)).slice(0,4), done=units.filter(unit=>unit.phase==='complete');
   // Preserve recent evidence for EVERY skill, not only the last topic practised.
   // Four independent completed units can substantiate all three support levels.
   // This also prevents a long run of café lessons from erasing an earlier skill.
   const retained=new Map();
   const retentionEvents=learningEvents({units:done,evidence:[]});
-  for(const skill of LEARNING_SKILLS){
+  for(const skill of LEARNING_SKILLS.filter(item=>!isFoundationSkill(item.id))){
     const recent=done.filter(item=>item.lesson.skillId===skill.id).slice(-4);
     const weak=statsFor(skill,retentionEvents,{units:done},Date.now()).weaknesses;
     const anchorCounts=new Map();
@@ -135,15 +206,18 @@ export function importCourseHistory(raw,teacherState) {
 }
 export function getLearningUnit(raw,id){return sanitizeLearningState(raw).units.find(unit=>unit.id===id)||null;}
 export function startLearningUnit(raw,lesson,{source='authored',nowISO}={}) {
-  const state=sanitizeLearningState(raw), active=state.units.find(unit=>unit.phase!=='complete');
+  const state=sanitizeLearningState(raw), active=selectedActiveUnit(state);
   if(active)return {state,unit:active};
-  const clean=validateGeneratedLesson(lesson), stamp=nowTime(nowISO);
+  let clean=validateGeneratedLesson(lesson);const foundation=nextFoundation(state);
+  if(foundation&&clean.skillId!==foundation.id){clean=buildPreparedLesson({skillId:foundation.id,difficulty:1},state);source='authored';}
+  const stamp=nowTime(nowISO);
   const token=globalThis.crypto?.randomUUID?.()||`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`;
   const unit={id:`learning-${token}`,lesson:clean,source:source==='ai'?'ai':'authored',createdAt:stamp,phase:'lesson',practiceIndex:0,homeworkIndex:0,practice:cleanPhase({},clean.practice),homework:{...cleanPhase({},clean.homework),assignedAt:null,dueAt:null},completedAt:null};
   state.units.push(unit);return {state:sanitizeLearningState(state),unit};
 }
 function currentUnit(state,id,phase,exerciseId) {
   const unit=state.units.find(item=>item.id===id);if(!unit||unit.phase!==phase)return null;
+  const foundation=nextFoundation(state);if(foundation&&unit.lesson.skillId!==foundation.id)return null;
   const question=questions(unit,phase)[unit[indexKey(phase)]];
   return question&&(!exerciseId||question.id===exerciseId)?{unit,question,phaseData:unit[side(phase)]}:null;
 }
@@ -187,6 +261,15 @@ function learningEvents(state) {
       events.push({...attempt,key:`${unit.id}:${phase}:${question.id}:${attempt.at}`,unitId:unit.id,skillId:unit.lesson.skillId,difficulty:unit.lesson.difficulty,phase,prompt:question.prompt,firstAttempt,independent:firstAttempt&&!attempt.hinted,completed:unit.phase==='complete'});
     }
   }
+  const represented=new Set(state.units.map(unit=>unit.id));
+  for(const group of FOUNDATION_GROUPS)for(const proof of state.foundations?.[group.id]||[]){
+    if(represented.has(proof.unitId))continue;
+    for(const phase of ['lesson','assignment'])for(const check of proof[side(phase)]){
+      const common={unitId:proof.unitId,skillId:group.id,difficulty:proof.difficulty,phase,exerciseId:check.question.id,prompt:check.question.prompt,completed:true};
+      events.push({...common,key:`${proof.unitId}:${phase}:${check.question.id}:first`,answer:check.firstAnswer,at:check.firstAt,hinted:check.firstHinted,firstAttempt:true,independent:!check.firstHinted,...gradeExercise(check.question,check.firstAnswer)});
+      if(check.answer!==check.firstAnswer||check.at!==check.firstAt)events.push({...common,key:`${proof.unitId}:${phase}:${check.question.id}:last`,answer:check.answer,at:check.at,hinted:check.hinted,firstAttempt:false,independent:false,...gradeExercise(check.question,check.answer)});
+    }
+  }
   return events.sort((a,b)=>a.at.localeCompare(b.at));
 }
 function statsFor(skill,events,state,now) {
@@ -225,8 +308,10 @@ function statsFor(skill,events,state,now) {
   return {id:skill.id,skillId:skill.id,label:skill.label,difficulty:level,level,attempts:all.length,correct:all.filter(event=>event.correct).length,independentCorrect,wrong:all.filter(event=>!event.correct).length,accuracy:first.length?first.filter(event=>event.correct).length/first.length:null,streak,dueAt,lastPracticedAt,weaknesses,reason:weaknesses.length?'Revisit a phrase that needed help.':first.length?'Build recall with another small step.':'Start with a simple example.'};
 }
 function chooseNext(state,skills,now) {
-  const active=state.units.find(unit=>unit.phase!=='complete');
+  const foundation=nextFoundation(state),active=selectedActiveUnit(state);
   if(active){const skill=skills.find(item=>item.id===active.lesson.skillId);return {skillId:skill.id,label:skill.label,difficulty:active.lesson.difficulty,reason:active.phase==='assignment'?'Continue your saved assignment.':'Continue your saved lesson.'};}
+  if(foundation)return {skillId:foundation.id,label:foundation.label,difficulty:1,foundation:true,reason:state.foundations[foundation.id]?.length?'A short review will help these letter sounds stick. Try each sound without a hint before the next letters.':'Start with a few Japanese letters and their sounds before words or sentences.'};
+  skills=skills.filter(skill=>!isFoundationSkill(skill.id));
   const weak=skills.filter(skill=>skill.weaknesses.length&&(skill.accuracy<.8||skill.weaknesses.some(item=>item.misses>=2))).sort((a,b)=>b.weaknesses.length-a.weaknesses.length||a.accuracy-b.accuracy)[0];
   if(weak)return {skillId:weak.id,label:weak.label,difficulty:weak.level,reason:'A recent answer showed that this needs a gentler review.'};
   const due=skills.filter(skill=>skill.dueAt&&Date.parse(skill.dueAt)<=now).sort((a,b)=>Date.parse(a.dueAt)-Date.parse(b.dueAt))[0];
@@ -241,8 +326,10 @@ function chooseNext(state,skills,now) {
 export function getLearningSummary(raw,nowISO) {
   const state=sanitizeLearningState(raw), now=Date.parse(nowTime(nowISO)), events=learningEvents(state);
   const skills=LEARNING_SKILLS.map(skill=>statsFor(skill,events,state,now));
-  const pendingUnits=state.units.filter(unit=>unit.phase==='assignment'), activeUnit=state.units.find(unit=>unit.phase!=='complete')||null;
-  return {skills,next:chooseNext(state,skills,now),activeUnit,completedUnits:state.units.filter(unit=>unit.phase==='complete').length,pendingAssignments:pendingUnits.length,pendingUnits,
+  const foundation=nextFoundation(state),pendingUnits=state.units.filter(unit=>unit.phase==='assignment'&&(!foundation||unit.lesson.skillId===foundation.id)), activeUnit=selectedActiveUnit(state);
+  const completed=foundation?foundation.order:FOUNDATION_GROUPS.length;
+  const next=chooseNext(state,skills,now);next.foundation=isFoundationSkill(next.skillId);
+  return {skills,next,activeUnit,foundationNext:foundation,foundations:{completed,total:FOUNDATION_GROUPS.length,currentScript:foundation?.script||'words'},completedUnits:state.units.filter(unit=>unit.phase==='complete').length,pendingAssignments:pendingUnits.length,pendingUnits,
     weaknesses:skills.flatMap(skill=>skill.weaknesses.map(item=>({...item,skillId:skill.id,label:skill.label}))).sort((a,b)=>b.at.localeCompare(a.at)).slice(0,12)};
 }
 export function recommendLesson(raw,nowISO){return getLearningSummary(raw,nowISO).next;}

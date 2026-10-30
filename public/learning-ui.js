@@ -1,6 +1,7 @@
 import {
   getLearningSummary, recommendLesson, buildPreparedLesson, startLearningUnit,
   getLearningUnit, saveLearningAnswer, useLearningHint, checkLearningAnswer, advanceLearningStep,
+  isFoundationSkill,
 } from './learning-core.js';
 
 const LEVELS = {1: 'With help', 2: 'On your own', 3: 'Challenge'};
@@ -66,7 +67,7 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     const weaknesses = Array.isArray(data.weaknesses) ? data.weaknesses : [];
     if(!weaknesses.length) section.append(el('p', '', 'Your first answers will show me where to give you more help. You can use a hint whenever you need one.'));
     else {
-      section.append(el('p', '', 'These are phrases from your saved practice that deserve another small step. A mistake is useful information.'));
+      section.append(el('p', '', 'These are sounds or phrases from your saved practice that deserve another small step. A mistake is useful information.'));
       const list = el('ul', 'learning-weaknesses');
       for(const item of weaknesses.slice(0, detailed ? 8 : 3)) {
         const entry = el('li'); entry.append(el('strong', '', item.label || 'Japanese practice'), el('span', '', item.prompt || item.feedback || 'We will practise this again.'));
@@ -84,17 +85,29 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
       el('p', '', recommendation.reason || 'We will start simply and use your answers to choose what comes next.'));
     content.append(card); return card;
   }
+  function writingPath(content) {
+    const path = el('section', 'learning-writing-path');
+    path.append(el('h3', '', 'Letters and sounds come first'));
+    const steps = el('ol');
+    for(const [name, detail] of [['Hiragana', 'Your first Japanese characters'], ['Katakana', 'A second set of characters'], ['Words and sentences', 'Put the sounds together']]) {
+      const step = el('li'); step.append(el('strong', '', name), el('span', '', detail)); steps.append(step);
+    }
+    path.append(steps, el('p', '', 'We will learn a few characters at a time. Look, listen, and choose a sound. You do not need a Japanese keyboard.'));
+    content.append(path);
+  }
   function show() {
     const data = summary();
     const content = open('Your learning plan', 'ONE SMALL STEP · THEN PRACTISE', 'We will learn a little, try it together, and return to anything that feels difficult.');
     navigation(content, 'lessons');
+    writingPath(content);
     const next = data.next || recommendLesson(getState());
     reason(content, next);
     const active = data.activeUnit;
+    const foundation = isFoundationSkill(next.skillId);
     const row = el('div', 'action-row learning-primary-actions');
-    row.append(action(active ? 'Continue where I stopped →' : 'Teach my next lesson →', 'primary-button', () => { void continueLearning(); }));
-    if(!active && canGenerate() && typeof generateLesson === 'function') row.append(action('Use a prepared lesson', 'secondary-button', () => {void continueLearning({prepared:true});}));
-    content.append(row, el('p', 'help-note', active ? 'Your lesson and answers are saved. Continue without starting again.' : canGenerate() ? 'Hiroshi can prepare a new lesson around your saved practice. You choose when to begin.' : 'Prepared lessons work without an AI connection. Your answers still guide the next topic and the amount of help.'));
+    row.append(action(active ? 'Continue where I stopped →' : foundation ? `Start with ${next.skillId.includes('katakana') ? 'katakana' : 'hiragana'} →` : 'Teach my next lesson →', 'primary-button', () => { void continueLearning(); }));
+    if(!active && !foundation && canGenerate() && typeof generateLesson === 'function') row.append(action('Use a prepared lesson', 'secondary-button', () => {void continueLearning({prepared:true});}));
+    content.append(row, el('p', 'help-note', active ? 'Your lesson and answers are saved. Continue without starting again.' : foundation ? 'Your letter and sound lessons are ready now. We will start with a few characters, then practise remembering their sounds.' : canGenerate() ? 'Hiroshi can prepare a new lesson around your saved practice. You choose when to begin.' : 'Prepared lessons work without an AI connection. Your answers still guide the next topic and the amount of help.'));
     memory(content, data); shortcuts(content);
   }
   async function continueLearning({prepared = false} = {}) {
@@ -102,7 +115,7 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     const data = summary();
     if(data.activeUnit) { showUnit(data.activeUnit.id); return true; }
     const recommendation = data.next || recommendLesson(getState());
-    if(prepared || !canGenerate() || typeof generateLesson !== 'function') {
+    if(prepared || isFoundationSkill(recommendation.skillId) || !canGenerate() || typeof generateLesson !== 'function') {
       const lesson = buildPreparedLesson(recommendation, getState(), getProfile());
       const outcome = startLearningUnit(getState(), lesson, {source:'authored'});
       update(outcome.state); showUnit(outcome.unit.id); return true;
@@ -143,14 +156,17 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     })();
     return job.promise;
   }
-  function example(content, item) {
+  function example(content, item, {foundation = false, script = 'Japanese'} = {}) {
     if(!item) return;
-    const card = el('section', 'learning-example');
+    const card = el('section', `learning-example${foundation ? ' learning-character-card' : ''}`);
+    if(foundation) card.append(el('p', 'learning-character-label', `${script} character`));
     const target = el('p', 'learning-japanese', item.target); target.lang = 'ja';
     card.append(target);
+    if(foundation && item.reading) card.append(el('p', 'learning-character-label', 'Sound in English letters'));
     if(item.reading) card.append(el('p', 'learning-reading', item.reading));
+    if(foundation) card.append(el('p', 'learning-character-label', 'How to say it'));
     card.append(el('p', 'learning-meaning', item.meaning));
-    const listen = action('Listen', 'secondary-button', () => speak(item.target, 'ja', listen));
+    const listen = action(foundation ? 'Listen to the sound' : 'Listen', 'secondary-button', () => speak(item.target, 'ja', listen));
     listen.setAttribute('aria-label', `Listen to ${item.target}`); card.append(listen); content.append(card);
   }
   function showUnit(id) {
@@ -158,17 +174,26 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     if(!unit) { show(); return; }
     if(unit.phase === 'complete') { showComplete(unit); return; }
     const lesson = unit.lesson, assignment = unit.phase === 'assignment';
+    const foundation = isFoundationSkill(lesson.skillId), script = lesson.skillId.includes('katakana') ? 'Katakana' : 'Hiragana';
     const phase = assignment ? 'assignment' : 'lesson';
     const questions = assignment ? lesson.homework : lesson.practice;
     const index = assignment ? unit.homeworkIndex : unit.practiceIndex;
     const question = questions[index];
     if(!question) { show(); return; }
+    const currentExample = foundation
+      ? lesson.examples.find(item => question.prompt.includes(item.target) && question.answers.some(value => value === item.reading || value === item.target))
+        || lesson.examples.find(item => question.answers.some(value => value === item.reading || value === item.target))
+        || lesson.examples.find(item => question.prompt.includes(item.target))
+        || lesson.examples[index % lesson.examples.length]
+      : lesson.examples[Math.min(index, lesson.examples.length - 1)];
     const part = assignment ? unit.homework : unit.practice;
-    const content = open(lesson.title, assignment ? 'YOUR ASSIGNMENT · ONE QUESTION AT A TIME' : 'LEARN · TRY · KEEP GOING',
-      assignment ? 'Use what we learned. You can open the notes or ask for a hint whenever you need one.' : 'We will work through one small idea and one question at a time.', assignment ? 'assignments' : 'lessons');
+    const content = open(lesson.title, assignment ? foundation ? 'YOUR LETTER PRACTICE · ONE SOUND AT A TIME' : 'YOUR ASSIGNMENT · ONE QUESTION AT A TIME' : foundation ? 'LOOK · LISTEN · CHOOSE A SOUND' : 'LEARN · TRY · KEEP GOING',
+      foundation ? 'Let’s learn the Japanese characters slowly, one sound at a time.' : assignment ? 'Use what we learned. You can open the notes or ask for a hint whenever you need one.' : 'We will work through one small idea and one question at a time.', assignment ? 'assignments' : 'lessons');
+    if(foundation) content.classList?.add('learning-foundation');
     const top = el('div', 'learning-unit-toolbar');
     top.append(action('← My learning plan', 'teacher-link', show), el('span', 'learning-level', LEVELS[lesson.difficulty] || LEVELS[1]));
-    content.append(top, el('p', 'learning-objective', lesson.objective));
+    content.append(top);
+    if(!foundation) content.append(el('p', 'learning-objective', lesson.objective));
     const progress = el('div', 'learning-step-progress');
     progress.append(el('strong', '', `${assignment ? 'Assignment' : 'Practice'} ${index + 1} of ${questions.length}`));
     const meter = el('progress'); meter.max = questions.length; meter.value = index;
@@ -177,18 +202,22 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     if(!assignment) {
       const teaching = el('section', 'learning-teaching');
       teaching.append(el('h3', '', 'Let’s learn this small part'));
-      const paragraph = lesson.explanation[Math.min(index, lesson.explanation.length - 1)];
+      const paragraph = foundation
+        ? lesson.explanation.find(text => text.includes(currentExample.target)) || lesson.explanation[Math.min(lesson.examples.indexOf(currentExample), lesson.explanation.length - 1)]
+        : lesson.explanation[Math.min(index, lesson.explanation.length - 1)];
       if(paragraph) teaching.append(el('p', '', paragraph));
-      content.append(teaching); example(content, lesson.examples[Math.min(index, lesson.examples.length - 1)]);
+      if(foundation) { example(content, currentExample, {foundation, script}); content.append(teaching); }
+      else {content.append(teaching); example(content, currentExample);}
     } else {
       const notes = el('details', 'learning-notes'); notes.append(el('summary', '', 'Open my lesson notes'));
       for(const paragraph of lesson.explanation) notes.append(el('p', '', paragraph));
-      for(const item of lesson.examples) example(notes, item);
+      for(const item of lesson.examples) example(notes, item, {foundation, script});
       notes.addEventListener('toggle', () => {
         if(notes.open) update(useLearningHint(getState(), unit.id, phase, question.id));
       });
       content.append(notes);
     }
+    if(foundation) content.append(el('p', 'learning-keyboard-note', 'Tap an answer, or type the sound in English letters. No Japanese keyboard needed.'));
     const form = el('form', 'learning-question');
     const group = el('fieldset'); group.append(el('legend', '', question.prompt));
     let answer = plain(part.answers?.[question.id]);
@@ -196,7 +225,7 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     const reviewed = previous && plain(previous.answer).trim() === answer.trim() ? previous : null;
     const feedback = el('div', `learning-feedback${reviewed?.correct ? ' correct' : ' retry'}`);
     feedback.setAttribute('role', 'status'); feedback.hidden = !reviewed;
-    if(reviewed) renderFeedback(feedback, reviewed);
+    if(reviewed) renderFeedback(feedback, reviewed, foundation);
     const nextLabel = index + 1 < questions.length ? 'Next small step →' : assignment ? 'Finish this assignment →' : 'Open my assignment →';
     const next = action(nextLabel, 'primary-button', () => {
       const state = advanceLearningStep(getState(), unit.id, phase);
@@ -217,7 +246,8 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
       group.append(options);
     } else {
       const input = el('textarea', 'learning-answer'); input.rows = 2; input.maxLength = 500; input.value = answer;
-      input.placeholder = 'Japanese or the taught romanization'; input.setAttribute('aria-label', question.prompt);
+      input.placeholder = foundation ? 'Type the sound in English letters' : 'Japanese or the taught romanization'; input.setAttribute('aria-label', question.prompt);
+      if(foundation) {input.inputMode = 'text'; input.autocapitalize = 'none'; input.spellcheck = false;}
       input.addEventListener('input', () => draft(input.value)); group.append(input);
     }
     const hints = el('div', 'learning-hint'); hints.hidden = !part.hints?.[question.id];
@@ -234,7 +264,7 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
       if(!answer.trim()) {toast('Try an answer, or use a hint first.'); return;}
       const outcome = checkLearningAnswer(getState(), unit.id, phase, question.id, answer);
       update(outcome.state);
-      renderFeedback(feedback, outcome.report); feedback.hidden = false; next.disabled = !outcome.report.correct;
+      renderFeedback(feedback, outcome.report, foundation); feedback.hidden = false; next.disabled = !outcome.report.correct;
       feedback.scrollIntoView?.({block:'nearest', behavior:'smooth'});
     });
     content.append(form);
@@ -249,9 +279,9 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
     content.append(el('p', 'learning-footnote', `${unit.source === 'ai' ? 'Personal AI lesson' : 'Prepared lesson'} · feedback checks this lesson’s taught forms. Hints and retries help Hiroshi choose how much support to give next.`));
     if(assignment) shortcuts(content);
   }
-  function renderFeedback(node, report) {
+  function renderFeedback(node, report, foundation = false) {
     node.className = `learning-feedback ${report.correct ? 'correct' : 'retry'}`;
-    node.replaceChildren(el('strong', '', report.correct ? 'You used the taught form' : 'Let’s try a small change'), el('p', '', report.feedback));
+    node.replaceChildren(el('strong', '', foundation ? report.correct ? 'That’s the sound!' : 'Let’s try that sound again' : report.correct ? 'You used the taught form' : 'Let’s try a small change'), el('p', '', report.feedback));
     if(!report.correct && report.expected) node.append(el('p', 'learning-expected', `Example to learn from: ${report.expected}`));
     if(report.correct && report.independent === false) node.append(el('small', '', 'Saved as practice with support. We will revisit it later.'));
   }
@@ -266,7 +296,12 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
   }
   function showAssignments() {
     const data = summary(), units = getState().units || [];
-    const pendingUnits = units.filter(unit => unit.phase === 'assignment');
+    const foundationsFirst = isFoundationSkill(data.activeUnit?.lesson?.skillId) || isFoundationSkill(data.next?.skillId);
+    const pendingUnits = data.pendingUnits;
+    if(foundationsFirst && !pendingUnits.length) {
+      if(data.activeUnit && isFoundationSkill(data.activeUnit.lesson.skillId)) { showUnit(data.activeUnit.id); return; }
+      return continueLearning({prepared:true});
+    }
     // Keep a saved assignment one tap away, with its earlier coursework shortcut.
     if(pendingUnits.length === 1) {
       showUnit(pendingUnits[0].id); return;
@@ -295,7 +330,7 @@ export function createLearningUI({getState, setState, getCompanionName = () => '
   }
   function showProgress() {
     const data = summary();
-    const content = open('Your learning progress', 'YOUR ANSWERS GUIDE YOUR NEXT STEP', 'This is what your saved practice tells us. We can take more time with difficult phrases and gradually remove help as you improve.', 'progress');
+    const content = open('Your learning progress', 'YOUR ANSWERS GUIDE YOUR NEXT STEP', 'This is what your saved practice tells us. We can take more time with difficult sounds or phrases and gradually remove help as you improve.', 'progress');
     navigation(content, 'progress');
     const statistics = el('div', 'learning-stats');
     for(const [value, label] of [[data.completedUnits || 0, 'lesson assignments finished'], [data.pendingAssignments || 0, 'assignments to continue']]) {
