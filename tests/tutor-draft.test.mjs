@@ -7,7 +7,9 @@ const source = await readFile(new URL('../public/app.js', import.meta.url), 'utf
 const start = source.indexOf('const teacherUI=createTeacherUI(');
 const end = source.indexOf("\n$('nav-teacher')", start);
 assert.ok(start >= 0 && end > start, 'The actual teacher UI hookup must be exercised.');
-const hookupSource = source.slice(start, end);
+const helperStart=source.indexOf('function askTeacher('), helperEnd=source.indexOf('\nasync function generateLearningLesson',helperStart);
+assert.ok(helperStart>=0&&helperEnd>helperStart);
+const hookupSource = source.slice(helperStart,helperEnd)+'\n'+source.slice(start, end);
 
 function harness(draft, {live = true, busy = false} = {}) {
   let value = draft, writes = 0, hookup;

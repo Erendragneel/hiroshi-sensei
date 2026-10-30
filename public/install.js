@@ -1,6 +1,6 @@
 // Browsers expose installation in different ways. Keep an accessible route to
 // instructions even when a native install prompt is unavailable or dismissed.
-import { APP_CONFIG } from './app-config.js?v=20261026-personal-learning';
+import { APP_CONFIG } from './app-config.js?v=20261030-adaptive-teacher';
 export const PHONE_APP_URL = APP_CONFIG.phoneURL;
 
 export function createInstallUI({openModal, toast, getName = () => 'Hiroshi sensei', getConnection = () => ({configured:false, provider:'none'}), phoneURL = PHONE_APP_URL, onExportBackup = null}) {

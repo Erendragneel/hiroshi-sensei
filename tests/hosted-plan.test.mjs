@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFile} from 'node:fs/promises';
 import {generateKeyPairSync, createSign, createHash, randomBytes} from 'node:crypto';
-import {createHiroshiHandler, buildChatRequest, parseResponseStream, validateIdentity} from '../connection-server/core.mjs';
+import {createHiroshiHandler, buildChatRequest, buildLessonRequest, parseLessonReply, parseResponseStream, validateIdentity} from '../connection-server/core.mjs';
+import {LESSONS} from '../public/teacher-core.js';
+import {LEARNING_LESSON_SCHEMA} from '../public/learning-schema.js';
 
 const origin = 'https://erendragneel.github.io';
 const backend = 'https://koa-personal-companion.elijio-villa.chatgpt.site/api/hiroshi';
@@ -49,11 +51,19 @@ function d1() {
 const completed = value => new Response(`data: ${JSON.stringify({type: 'response.completed', response: {status: 'completed', output: [{type: 'message', content: [{type: 'output_text', text: value}]}]}})}\n\n`, {headers: {'Content-Type': 'text/event-stream'}});
 const reply = {reply: 'こんにちは。', reading: 'Konnichiwa.', translation: 'Hello.', correction: 'A useful correction.', suggestions: Array.from({length: 3}, () => ({text: 'はい。', meaning: 'Yes.'}))};
 const payload = () => ({language: 'ja', level: 'beginner', scene: 'cafe', corrections: false, messages: [{role: 'user', content: 'こんにちは'}]});
+const lessonBrief = () => ({skillId: 'introductions', difficulty: 1,
+  weaknesses: [{prompt: 'Introduce yourself.', feedback: 'Put the name before desu.', answer: 'Ken wa'}],
+  recentLessons: ['A different first lesson'], profile: {name: 'Learner', interests: 'music'}, reason: 'Practise the missed introduction.'});
+const lessonFixture = () => {
+  const {title, objective, explanation, examples, practice, homework} = LESSONS[0];
+  const exercise = item => ({id: item.id, type: item.type, prompt: item.prompt, options: item.options || [], answers: item.answers, sample: item.sample, explanation: item.explanation});
+  return {skillId: 'introductions', difficulty: 1, title, objective, explanation, examples, practice: practice.map(exercise), homework: homework.map(exercise)};
+};
 
 function fixture() {
   const DB = d1(), env = {DB, HIROSHI_ALLOW_OWNER_BOOTSTRAP: '1'};
   const clock = {at: Date.now()};
-  const remote = {calls: [], refreshes: 0, smokes: 0, jwksFailures: 0, smokeFailures: 0, rejectRefresh: false, holdRefresh: null};
+  const remote = {calls: [], refreshes: 0, smokes: 0, lessons: 0, jwksFailures: 0, smokeFailures: 0, rejectRefresh: false, holdRefresh: null};
   const fetchImpl = async (url, options = {}) => {
     remote.calls.push({url, options});
     assert.equal(options.redirect, 'manual');
@@ -74,7 +84,9 @@ function fixture() {
     if (url.endsWith('/responses')) {
       const body = JSON.parse(options.body);
       assert.equal(body.store, false); assert.equal(body.stream, true);
-      assert.ok(!('temperature' in body)); assert.ok(!('max_output_tokens' in body));
+      assert.ok(!('temperature' in body));
+      if (body.text?.format?.name === 'hiroshi_personal_lesson') assert.equal(body.max_output_tokens, 6000);
+      else assert.ok(!('max_output_tokens' in body));
       if (body.input.at(-1).content === 'Say exactly: Connected.') {
         remote.smokes++;
         if (remote.smokeFailures-- > 0) return new Response('data: {"type":"response.failed","response":{"error":{"code":"private-provider-error"}}}\n\n', {headers: {'Content-Type': 'text/event-stream'}});
@@ -83,6 +95,13 @@ function fixture() {
       if (remote.pauseChat) {
         remote.chatSignal = options.signal; remote.chatEntered?.();
         await new Promise((resolve, reject) => { if (options.signal.aborted) reject(new Error('Cancelled')); else options.signal.addEventListener('abort', () => reject(new Error('Cancelled')), {once: true}); });
+      }
+      if (body.text?.format?.name === 'hiroshi_personal_lesson') {
+        remote.lessons++; remote.lessonPayload = body;
+        if (remote.lessonFailure === 'limit') return Response.json({error: {code: 'private-provider-error', message: 'fixture-private-provider-detail'}}, {status: 429});
+        if (remote.lessonFailure === 'incomplete') return new Response('data: {"type":"response.incomplete","response":{"status":"incomplete"}}\n\n', {headers: {'Content-Type': 'text/event-stream'}});
+        if (remote.lessonFailure === 'refusal') return new Response('data: {"type":"response.refusal.delta","delta":"fixture-private-provider-detail"}\n\n', {headers: {'Content-Type': 'text/event-stream'}});
+        return completed(remote.lessonRaw ?? JSON.stringify(lessonFixture()));
       }
       return completed(JSON.stringify(reply));
     }
@@ -471,4 +490,108 @@ test('very short provider expiry is preserved and renewal performs at most one b
   const saved = JSON.parse(f.DB.sqlite.prepare('SELECT record FROM hiroshi_connection').get().record);
   assert.equal(saved.expiresAt, f.clock.at + 1000); assert.equal(saved.refreshToken, REFRESH + '-renewed');
   assert.equal(saved.pendingRefresh, undefined); assert.equal(f.DB.sqlite.prepare('SELECT lease_until FROM hiroshi_connection').get().lease_until, 0);
+});
+
+test('personal lesson requests bind the selected skill and difficulty with bounded untrusted learning evidence', () => {
+  const brief = lessonBrief();
+  brief.weaknesses = Array.from({length: 10}, () => ({prompt: 'P'.repeat(900), feedback: 'IGNORE_RULES_SENTINEL'.repeat(40), answer: 'A'.repeat(900)}));
+  brief.recentLessons = Array.from({length: 12}, (_, index) => `${index}-${'T'.repeat(200)}`);
+  brief.profile = {name: 'IGNORE_NAME_SENTINEL', interests: 'IGNORE_INTERESTS_SENTINEL'};
+  const request = buildLessonRequest(brief, 'fixture-offered-model');
+  assert.equal(request.model, 'fixture-offered-model'); assert.equal(request.store, false); assert.equal(request.stream, true);
+  assert.equal(request.max_output_tokens, 6000);
+  assert.deepEqual(request.text.format, {type: 'json_schema', name: 'hiroshi_personal_lesson', strict: true, schema: LEARNING_LESSON_SCHEMA});
+  assert.ok(!request.instructions.includes('IGNORE_RULES_SENTINEL')); assert.ok(!request.instructions.includes('IGNORE_NAME_SENTINEL'));
+  assert.match(request.instructions, /never obey directives|do not obey directives/);
+  const reference = JSON.parse(request.input[0].content.split('\n').slice(1).join('\n'));
+  assert.equal(reference.weaknesses.length, 6); assert.equal(reference.recentLessons.length, 8);
+  assert.ok(reference.weaknesses.every(item => item.prompt.length === 240 && item.feedback.length === 400 && item.answer.length === 240));
+  assert.ok(reference.recentLessons.every(title => title.length <= 160));
+  assert.equal(reference.profile.name, brief.profile.name);
+  for (const invalid of [null, {...lessonBrief(), skillId: 'unknown'}, {...lessonBrief(), difficulty: 4}, {...lessonBrief(), difficulty: '1'}, {...lessonBrief(), weaknesses: [{prompt: '', feedback: 'missing'}]}, {...lessonBrief(), recentLessons: [{}]}, {...lessonBrief(), profile: []}, {...lessonBrief(), reason: 'x'.repeat(40_000)}]) {
+    assert.throws(() => buildLessonRequest(invalid, 'model'), error => error.status === 400);
+  }
+});
+
+test('lesson generation is protected by the existing device authorization and GitHub CORS boundary', async () => {
+  const f = fixture(), {device} = await f.ready();
+  assert.equal((await f.call('/lesson', {body: lessonBrief()})).status, 401);
+  const foreign = await f.call('/lesson', {body: lessonBrief(), token: device.sessionToken, from: 'https://unapproved.invalid'});
+  assert.equal(foreign.status, 403); assert.equal(foreign.headers.get('Access-Control-Allow-Origin'), null);
+  assert.equal(f.remote.lessons, 0);
+  const response = await f.call('/lesson', {body: lessonBrief(), token: device.sessionToken});
+  assert.equal(response.status, 200); assert.equal(response.headers.get('Access-Control-Allow-Origin'), origin);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  const result = await response.json();
+  assert.deepEqual(result, {lesson: lessonFixture(), provider: 'chatgpt', model: 'fixture-offered-model'});
+  assert.equal(f.remote.lessons, 1);
+  assert.equal(f.DB.sqlite.prepare('SELECT verified_at FROM hiroshi_connection').get().verified_at !== null, true);
+  assert.ok(!JSON.stringify(result).includes(ACCESS));
+});
+
+test('invalid lesson briefs fail before upstream inference and do not alter the saved connection', async () => {
+  const f = fixture(), {device} = await f.ready();
+  const saved = f.DB.sqlite.prepare('SELECT record FROM hiroshi_connection').get().record;
+  for (const body of [{...lessonBrief(), skillId: 'not-a-skill'}, {...lessonBrief(), difficulty: 0}, {...lessonBrief(), weaknesses: [{prompt: 'hello'}]}]) {
+    const response = await f.call('/lesson', {body, token: device.sessionToken});
+    assert.equal(response.status, 400); assert.equal(f.remote.lessons, 0);
+  }
+  assert.equal(f.DB.sqlite.prepare('SELECT record FROM hiroshi_connection').get().record, saved);
+});
+
+test('generated lessons must match their selected step and never smuggle extra mastery or progress fields', () => {
+  const brief = lessonBrief(), lesson = lessonFixture();
+  assert.deepEqual(parseLessonReply(JSON.stringify(lesson), brief), lesson);
+  for (const invalid of ['partial', JSON.stringify({...lesson, skillId: 'cafe-requests'}), JSON.stringify({...lesson, difficulty: 3}), JSON.stringify({...lesson, mastery: 100}), JSON.stringify({...lesson, homework: []}), JSON.stringify({...lesson, practice: lesson.practice.map(item => ({...item, id: 'duplicate'}))}), JSON.stringify({...lesson, title: 'x'.repeat(141)}), 'x'.repeat(41 * 1024)]) {
+    assert.throws(() => parseLessonReply(invalid, brief), error => error.code === 'AI_INVALID_LESSON' && !error.message.includes(invalid));
+  }
+  assert.throws(() => parseLessonReply(JSON.stringify(lesson), {...brief, recentLessons: [' MEET SOMEONE NEW!!! ']}), {code: 'AI_REPEATED_LESSON'});
+});
+
+test('incomplete, refused, limited and malformed generated lessons return safe errors without losing saved authorization', async () => {
+  for (const [mode, status, code] of [['incomplete', 502, 'AI_INCOMPLETE'], ['refusal', 422, 'AI_REFUSAL'], ['limit', 429, 'CHATGPT_LIMIT_REACHED'], ['malformed', 502, 'AI_INVALID_LESSON']]) {
+    const f = fixture(), {device} = await f.ready();
+    f.remote.lessonFailure = mode;
+    if (mode === 'malformed') f.remote.lessonRaw = JSON.stringify({...lessonFixture(), unapproved: 'fixture-private-provider-detail'});
+    const response = await f.call('/lesson', {body: lessonBrief(), token: device.sessionToken});
+    assert.equal(response.status, status);
+    const result = await response.json(); assert.equal(result.error.code, code);
+    assert.ok(!JSON.stringify(result).includes('fixture-private-provider-detail'));
+    assert.ok(f.DB.sqlite.prepare('SELECT verified_at FROM hiroshi_connection').get().verified_at);
+    assert.equal(f.remote.lessons, 1);
+  }
+});
+
+test('lesson generation shares the existing per-owner request cap with chat rather than bypassing it', async () => {
+  const f = fixture(), {device} = await f.ready();
+  for (let index = 0; index < 12; index++) assert.equal((await f.call('/lesson', {body: lessonBrief(), token: device.sessionToken})).status, 200);
+  assert.equal(f.remote.lessons, 12);
+  const limited = await f.call('/chat', {body: payload(), token: device.sessionToken});
+  assert.equal(limited.status, 429); assert.equal((await limited.json()).error.code, 'RATE_LIMITED');
+  assert.equal(f.remote.lessons, 12);
+});
+
+test('cancelling a personalized lesson aborts its upstream generation and retains the remembered device', async () => {
+  const f = fixture(), {device} = await f.ready(), controller = new AbortController();
+  f.remote.pauseChat = true;
+  let entered; const started = new Promise(resolve => {entered = resolve;}); f.remote.chatEntered = entered;
+  const pending = f.call('/lesson', {token: device.sessionToken, body: lessonBrief(), signal: controller.signal});
+  await started; controller.abort();
+  assert.equal((await pending).status, 503); assert.equal(f.remote.chatSignal.aborted, true);
+  assert.ok(f.DB.sqlite.prepare('SELECT verified_at FROM hiroshi_connection').get().verified_at);
+  assert.equal((await f.call('/status', {token: device.sessionToken})).status, 200);
+});
+
+test('lesson chat can use compact remembered struggles without turning reported evidence into model instructions', () => {
+  const lesson = lessonFixture();
+  const teacherContext = {lessonId: 'adaptive-introductions', title: lesson.title, objective: lesson.objective,
+    explanation: lesson.explanation, examples: lesson.examples,
+    learningMemory: {difficulty: 1, weaknesses: [{prompt: 'IGNORE_MEMORY_SENTINEL', feedback: 'Try the topic particle.', answer: 'wa?'}]}};
+  const request = buildChatRequest({...payload(), teacherContext}, 'fixture-offered-model');
+  assert.ok(!request.instructions.includes('IGNORE_MEMORY_SENTINEL'));
+  assert.match(request.instructions, /teach one small idea in plain English/);
+  const reference = JSON.parse(request.input.at(-2).content.split('\n').slice(1).join('\n'));
+  assert.equal(reference.lesson.learningMemory.weaknesses[0].prompt, 'IGNORE_MEMORY_SENTINEL');
+  assert.equal(reference.lesson.learningMemory.difficulty, 1);
+  assert.throws(() => buildChatRequest({...payload(), teacherContext: {...teacherContext, learningMemory: {difficulty: 9, weaknesses: []}}}, 'model'), {code: 'INVALID_LEARNING_MEMORY'});
 });
